@@ -96,5 +96,12 @@ Anyone interested may want to start with [Wikipedia's entry on Operational Trans
 
 If anyone is interested, under the hood *changesets* makes use of Neil Frasers amazing [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts.
 
+# Todo
+* Add tests for Exclusion Transformation
+* make Changeset#substract() more sane
+* What happens, if you apply the same CS multiple times, with or without transforming it?
+* Perhaps add text length diff to `Operation`s in order to be able validate them
+* Add a `pack()`/`unpack()`method to changesets
+
 # License
 MIT

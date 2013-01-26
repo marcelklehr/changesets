@@ -32,6 +32,8 @@ var changesets = require('../lib')
 
 var suite = vows.describe('changesets: operational transformation of text')
 
+// IT
+
 ;// Insert onto Insert
 [ ["123", ["a123", "123b"], "a123b", "Insert onto Insert; o1.pos < o2.pos"]
 , ["123", ["1a23", "1b23"], "1ab23", "Insert onto Insert; o1.pos = o2.pos"]
@@ -75,9 +77,53 @@ var suite = vows.describe('changesets: operational transformation of text')
 
         return cs1.apply(cs2.apply(test[0]))
       },
-      'should be correctly transformed using operational transformation': function(err, text) {
+      'should be correctly transformed using inclusion transformation': function(err, text) {
         assert.ifError(err)
-        assert.equal(text, test[2])
+        assert.equal(test[2], text)
+      }
+    }
+  suite.addBatch(batch)
+})
+
+// ET
+
+;// Insert minus Insert
+[ [["123", "123b", "a123b"], "a123", "Insert minus Insert; o2.pos < o1.pos"]
+, [["123", "b123", "b12a3"], "12a3", "Insert minus Insert; o1.pos < o2.pos"]
+, [["123", "bb123", "bab123"], "a123", "Insert minus Insert; o1.pos < o2.pos < o1.pos+len"]
+// Insert minus Delete
+, [["1234", "124", "a124"], "a1234", "Insert minus Delete; o2.pos < o1.pos"]
+, [["1234", "134", "1a34"], "12a34", "Insert minus Delete; o2.pos = o1.pos"]
+, [["1234", "34", "3a4"], "123a4", "Insert minus Delete; o1.pos < o2.pos"]
+// Delete minus Insert
+, [["123", "a123", "a13"], "13", "Delete minus Insert; o1.pos < o2.pos"]
+, [["123", "123a", "13a"], "13", "Delete minus Insert; o2.pos < o1.pos"]
+, [["1234", "12a34", "14"], "14", "Delete minus Insert; o2.pos < o1.pos < o2.pos+len"]
+, [["123", "12abc3", "12ac3"], "123", "Delete minus Insert;  o1.pos < o2.pos < o2.pos+len < o1.pos+len"]
+// Delete minus Delete
+, [["1234", "34", "4"], "124", "Delete minus Delete; o1.pos < o2.pos"]
+, [["1234", "123", "23"], "234", "Delete minus Delete; o2.pos < o1.pos"]
+, [["1234", "123", "12"], "124", "Delete minus Delete; o2.pos < o1.pos"]
+]
+.forEach(function(test, i) {
+  var batch = {}
+  batch[test[2]] = {
+      topic: function() {
+        var cs1 = engine.constructChangeset(test[0][0],test[0][1], 1)
+          , cs2 = engine.constructChangeset(test[0][1],test[0][2], 2)
+
+        console.log("\n\n", test[0][2], '-', test[0][1])
+        console.dir(cs1.dump())
+        console.dir(cs2.dump())
+
+        cs2 = cs2.substract(cs1)
+        console.log('=>', cs2.dump())
+
+        return cs2.apply(test[0][0])
+      },
+      'should be correctly transformed using exclusion transformation': function(err, text) {
+        assert.ifError(err)
+        assert.equal(test[1], text)
       }
     }
   suite.addBatch(batch)

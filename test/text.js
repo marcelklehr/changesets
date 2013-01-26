@@ -50,6 +50,7 @@ var suite = vows.describe('changesets: operational transformation of text')
 , ["1234", ["234", "124"], "24", "Delete onto Delete; o1.pos < o2.pos"]
 , ["123", ["3", "13"], "3", "Delete onto Delete; something at the end of my range has already been deleted"]
 , ["123", ["3", "23"], "3", "Delete onto Delete; something at the beginning of my range has already been deleted"]
+, ["1234", ["4", "134"], "4", "Delete onto Delete; something in the middle of my range has already been deleted"]
 , ["123", ["13", "1"], "1", "Delete onto Delete; my whole range has already been deleted ('twas at the beginning of the other change's range)"]
 , ["123", ["12", "1"], "1", "Delete onto Delete; my whole range has already been deleted ('twas at the end of the other change's range)"]
 , ["1234", ["134", "4"], "4", "Delete onto Delete; my whole range has already been deleted ('twas in the middle of the other change's range)"]

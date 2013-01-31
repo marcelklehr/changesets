@@ -1,7 +1,7 @@
 ﻿{
   "name": "changesets",
-  "version": "0.1.1",
-  "description": "A Changeset library incorporating operational transformation (OT).",
+  "version": "0.1.2",
+  "description": "A Changeset library incorporating an operational transformation (OT) algorithm.",
   "repository": {
     "type": "git",
     "url": "https://github.com/marcelklehr/node-changesets.git"

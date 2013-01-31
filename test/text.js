@@ -105,6 +105,9 @@ var suite = vows.describe('changesets: operational transformation of text')
 , [["1234", "34", "4"], "124", "Delete minus Delete; o1.pos < o2.pos"]
 , [["1234", "123", "23"], "234", "Delete minus Delete; o2.pos < o1.pos"]
 , [["1234", "123", "12"], "124", "Delete minus Delete; o2.pos < o1.pos"]
+// Mixed ET
+, [["1234", "2bc3", "2abc3"], "12a34", "Mixed ET 1"]
+, [["1234", "d2bc", "da2abc"], "1a234a", "Mixed ET 2"]
 ]
 .forEach(function(test, i) {
   var batch = {}
@@ -113,7 +116,7 @@ var suite = vows.describe('changesets: operational transformation of text')
         var cs1 = engine.constructChangeset(test[0][0],test[0][1], 1)
           , cs2 = engine.constructChangeset(test[0][1],test[0][2], 2)
 
-        console.log("\n\n", test[0][2], '-', test[0][1])
+        console.log("\n\n "+test[0][0]+":", test[0][2], '-', test[0][1])
         console.dir(cs1.dump())
         console.dir(cs2.dump())
 

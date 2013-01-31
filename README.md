@@ -1,4 +1,5 @@
-﻿# changesets
+﻿
+# changesets
 This is library allows you to build text-based concurrent multi-user applications.
 
 It was built with the following requirements in mind:
@@ -8,7 +9,7 @@ It was built with the following requirements in mind:
 
 Easily create changesets and apply them on all sites of a distributed system using Operational Transformation.
 
-Note: While, at the current stage of development, this library only implements a text-based changeset solution, I intend to add functionality for tree-based data and maybe even images.
+Note: While, at the current stage of development, this library only implements a text-based changeset solution, I intend to add functionality for tree-based data and at some point in the future maybe even images. If you would like to help, feel free to contact me.
 
 ## Install
 `npm install changesets`
@@ -92,15 +93,20 @@ for (var i=1; i < edits.length; i++) {
 This way we effectively exclude the given changes from all following changesets.
 
 # More information
-Anyone interested may want to start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a compehensive list of [Frequently asked questions concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq) (quite extensive!).
+Anyone interested in OT may want to start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq), I particularly recommend reading the latter.
 
-If anyone is interested, under the hood *changesets* makes use of Neil Frasers amazing [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts.
+
+# Under the hood
+*Changesets* makes use of Neil Fraser's [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts -- an amazing library!
+
+A Changeset, in the context of this lib, is defined as a group of context-equivalent operations. This means, they can be applied in any possible order as long as they're transformed against the previous ones to match the current document state.
+When you call Changeset#apply(), the method first transforms all contained operations on top of each other in a certain order, and then applies them all in sequence on the passed document.
 
 # Todo
-* make Changeset#substract() more sane
 * What happens, if you apply the same CS multiple times, with or without transforming it?
 * Perhaps add text length diff to `Operation`s in order to be able validate them
 * Add a `pack()`/`unpack()`method to changesets
+* Simplify anyundo (large numbers of changesets have to be transformed against each other and an undo changseset)
 
 # License
 MIT

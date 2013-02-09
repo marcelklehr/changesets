@@ -1,6 +1,6 @@
 ﻿
 # changesets
-This is library allows you to build text-based concurrent multi-user applications.
+This library allows you to build text-based concurrent multi-user applications.
 
 It was built with the following requirements in mind:
 * intention preservation

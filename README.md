@@ -34,7 +34,7 @@ finalText == text2 // true
 ```
 
 ### Operational transformation
-*Inclusion Transformation* as well as *Exclusion Transformation* are supported.
+*Inclusion Transformation* as well as *Exclusion Transformation* is supported.
 
 #### Inclusion Transformation
 Say, for instance, you give a text to two different people. Each of them makes some changes and hands them back to you.
@@ -53,7 +53,9 @@ The problem is that at least one changeset becomes invalid when we try to apply 
 csA.apply(textB) // -> "Good dtreasured ay adventurer!"
 csB.apply(textA) // -> "Good day treasured advs, y'allenturer!"
 ```
-Since we can at least safely apply one of them, we'll apply changeset A first on the original text. Now, in order to be able to apply changeset B, which still assumes the original context, we need to adjust it, based on the changes of changeset A, so that it still has the same effect on the text that was originally intended.
+Doesn't look that good.
+
+But since we can at least safely apply one of them, let's apply changeset A first on the original text. Now, in order to be able to apply changeset B, which still assumes the original context, we need to adjust it, based on the changes of changeset A, so that it still has the same effect on the text.
 ```js
 var csB_new = csB.transformAgainst(csA)
 
@@ -92,8 +94,8 @@ for (var i=1; i < edits.length; i++) {
 ```
 This way we effectively exclude the given changes from all following changesets.
 
-# More information
-Anyone interested in OT may want to start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq), I particularly recommend reading the latter.
+# Oppositional what?!
+In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
 
 
 # Under the hood

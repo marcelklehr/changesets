@@ -105,7 +105,6 @@ When you call Changeset#apply(), the method first transforms all contained opera
 # Todo
 * What happens, if you apply the same CS multiple times, with or without transforming it?
 * Perhaps add text length diff to `Operation`s in order to be able validate them
-* Add a `pack()`/`unpack()`method to changesets
 * Simplify anyundo (large numbers of changesets have to be transformed against each other and an undo changseset)
 
 # License

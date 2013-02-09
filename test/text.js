@@ -133,4 +133,19 @@ var suite = vows.describe('changesets: operational transformation of text')
   suite.addBatch(batch)
 })
 
+suite.addBatch({
+'pack/unpack':
+  { topic: function() {
+      return engine.constructChangeset("1234blabliblu", "1ab2c3blablakablibradalu")
+    }
+  , 'should be packed and unpacked correctly': function(er, cs) {
+      var packed = engine.pack(cs)
+      console.log()
+      console.log(packed)
+      var unpacked = engine.unpack(packed)
+      assert.deepEqual(unpacked, cs)
+    }
+  }
+})
+
 suite.export(module)

@@ -1,15 +1,17 @@
 ﻿
 # changesets
-This library allows you to build text-based concurrent multi-user applications.
+build text-based concurrent multi-user applications using operational transformation!
 
-It was built with the following requirements in mind:
-* intention preservation
-* reversibility/invertibility (undo effect)
-* convergence
+*changesets* allows you to easily create changesets and apply them on all sites of a distributed system using Operational Transformation. It was built with the following requirements in mind:
 
-Easily create changesets and apply them on all sites of a distributed system using Operational Transformation.
+* intention preservation (no content corruption; your edits always have the same effect)
+* reversibility/invertibility (undo any edit without corrupting the content or the state)
+* convergence (everybody sees the same state)
 
 Note: While, at the current stage of development, this library only implements a text-based changeset solution, I intend to add functionality for tree-based data and at some point in the future maybe even images. If you would like to help, feel free to contact me.
+
+### Oppositional what?!
+In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
 
 ## Install
 `npm install changesets`
@@ -93,10 +95,6 @@ for (var i=1; i < edits.length; i++) {
 }
 ```
 This way we effectively exclude the given changes from all following changesets.
-
-# Oppositional what?!
-In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
-
 
 # Under the hood
 *Changesets* makes use of Neil Fraser's [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts -- an amazing library!

@@ -70,11 +70,11 @@ var suite = vows.describe('changesets: operational transformation of text')
           , cs2 = engine.constructChangeset(test[0],test[1][1], 2)
 
         console.log("\n\n", test[0])        
-        console.dir(cs1.dump())
-        console.dir(cs2.dump())
+        console.dir(cs1.inspect())
+        console.dir(cs2.inspect())
 
         cs1 = cs1.transformAgainst(cs2)
-        console.log('=>', cs1.dump())
+        console.log('=>', cs1.inspect())
 
         return cs1.apply(cs2.apply(test[0]))
       },
@@ -117,11 +117,11 @@ var suite = vows.describe('changesets: operational transformation of text')
           , cs2 = engine.constructChangeset(test[0][1],test[0][2], 2)
 
         console.log("\n\n "+test[0][0]+":", test[0][2], '-', test[0][1])
-        console.dir(cs1.dump())
-        console.dir(cs2.dump())
+        console.dir(cs1.inspect())
+        console.dir(cs2.inspect())
 
         cs2 = cs2.substract(cs1)
-        console.log('=>', cs2.dump())
+        console.log('=>', cs2.inspect())
 
         return cs2.apply(test[0][0])
       },
@@ -139,10 +139,11 @@ suite.addBatch({
       return engine.constructChangeset("1234blabliblu", "1ab2c3blablakablibradalu")
     }
   , 'should be packed and unpacked correctly': function(er, cs) {
-      var packed = engine.pack(cs)
+      var packed = cs.pack()
       console.log()
+      console.log(cs.inspect())
       console.log(packed)
-      var unpacked = engine.unpack(packed)
+      var unpacked = engine.Changeset.unpack(packed)
       assert.deepEqual(unpacked, cs)
     }
   }

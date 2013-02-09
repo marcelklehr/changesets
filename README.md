@@ -28,11 +28,30 @@ Construct a changeset between two texts:
 ```js
 var changes = cs.text.constructChangeset(text1, text2)
 ```
-You get a `cs.Changeset` object containing multiple `cs.Operation`s. The changeset can be applied to a text as follows:
+You get a `cs.text.Changeset` object containing multiple `cs.Operation`s. The changeset can be applied to a text as follows:
 ```js
 var finalText = changes.apply(text1)
 
 finalText == text2 // true
+```
+
+### Serializing changesets
+In many cases you will find the need to serialize your changesets in order to efficiently transfer them through the network or store them on disk.
+
+`Changeset#pack()` takes a changeset object and returns the string representation of that changeset.
+```js
+var serialized = changeset.pack() // '+1:YWI:0+2:Yw:0-3:NA:0+9:YWthYmw:0+b:cmFkYQ:0'
+```
+
+`Changeset.unpack()` takes the output of `Changeset#pack()` and returns a changeset object.
+```js
+cs.text.Changeset.unpack(serialized) // {"0":{"accessory":0,"pos":1,"len":2,"text":"ab"},"1":{"accessory":0,"pos":2,"len":1,"text":"c"},"2":{"accessory":0,"pos":3,"len":1,"text" ...
+```
+
+If you'd like to display a changeset in a humanly readable form, use `Changeset#inspect`:
+
+```js
+changeset.inspect() // [ 'Insert 1:ab', 'Insert 2:c', 'Delete 3:4', 'Insert 9:akabl', 'Insert 11:rada' ]
 ```
 
 ### Operational transformation

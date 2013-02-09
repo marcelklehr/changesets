@@ -64,7 +64,7 @@ csB_new.apply(textA)
 In this scenario we employed *Inclusion Transformation*, which adjusts a changeset in a way so that it assumes the changes of another changeset already happened.
 
 #### Exclusion Transformation
-Imagine a text editor, where users that allows users to undo any edit they've ever done to a document. Naturally, one will choose to store all edits as a list of changesets, where each applied on top of the other results in the currently visible document.
+Imagine a text editor, that allows users to undo any edit they've ever done to a document. Naturally, one will choose to store all edits as a list of changesets, where each applied on top of the other results in the currently visible document.
 ```js
 var versions =
 [ ""
@@ -82,9 +82,9 @@ Now, if we want to undo a certain edit in the document's history without undoing
 ```js
 var inverse = edits[1].invert()
 ```
-Now we need to transform all following edits against this inverse changeset and in turn transform it against the previously iterated edits.
+Now we transform all following edits against this inverse changeset and in turn transform it against the previously iterated edits.
 ```
-var newEdits = [""]
+var newEdits = []
 for (var i=1; i < edits.length; i++) {
   newEdits[i] = edits[i].transformAgainst(inverse)
   inverse = inverse.transformAgainst(newEdits[i])

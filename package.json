@@ -20,7 +20,9 @@
     "text"
   ],
   "main": "./lib/index",
-  "test": "vows ./test/*",
+  "scripts": {
+    "test": "vows ./test/*"
+  },
   "dependencies": {
     "diff_match_patch": "*"
   },

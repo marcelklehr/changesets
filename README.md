@@ -2,6 +2,8 @@
 # changesets
 build text-based concurrent multi-user applications using operational transformation!
 
+[![Build Status](https://travis-ci.org/marcelklehr/node-changesets.png?branch=master)](https://travis-ci.org/marcelklehr/node-changesets)
+
 *changesets* allows you to easily create changesets and apply them on all sites of a distributed system using Operational Transformation. It was built with the following requirements in mind:
 
 * intention preservation (no content corruption; your edits always have the same effect)

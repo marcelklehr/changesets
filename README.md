@@ -18,12 +18,17 @@ In case the above question just came to your mind, you better start with [Wikipe
 ## Install
 `npm install changesets`
 
-In your code, `require('changesets')`
-
 ## Usage
-```
+In node, simply require `'changesets'`
+```js
 var cs = require('changesets')
 ```
+
+In the browser, you need to load the package as a browserified javascript file...
+```
+<script type="text/javascript" src="node_modules/changesets/client-side.js"></script>
+```
+... in order to be able to use the global `changesets` variable
 
 ### Constructing and applying changesets
 Construct a changeset between two texts:

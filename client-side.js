@@ -722,6 +722,7 @@ Changeset.prototype.toString = function() {
  * @param <cs.Changeset>
  */
 Changeset.unpack = function(packed) {
+  if(packed == '') return new Changeset
   var matches = packed.match(/(\+|-)\w+?:[^:]+?:\w+?/g)
   if(!matches) throw new Error('Cannot unpack invalid serialized changeset string')
   

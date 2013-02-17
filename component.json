@@ -21,6 +21,6 @@
   },
   "license": "MIT",
   "scripts": [
-    "index.js"
+    "lib/index.js"
   ]
 }

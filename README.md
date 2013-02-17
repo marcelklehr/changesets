@@ -16,19 +16,19 @@ Note: While, at the current stage of development, this library only implements a
 In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
 
 ## Install
-`npm install changesets`
+`npm install changesets` or `component install marcelklehr/changesets`
 
 ## Usage
-In node, simply require `'changesets'`
+In node (and using component), simply require `'changesets'`
 ```js
 var cs = require('changesets')
 ```
 
-In the browser, you need to load the package as a browserified javascript file...
+If you're not using component in the browser, you need to load the package as a browserified javascript file...
 ```
 <script type="text/javascript" src="node_modules/changesets/client-side.js"></script>
 ```
-... in order to be able to use the global `changesets` variable
+... and use the global `changesets` variable ;)
 
 ### Constructing and applying changesets
 Construct a changeset between two texts:
@@ -132,7 +132,7 @@ When you call Changeset#apply(), the method first transforms all contained opera
 * What happens, if you apply the same CS multiple times, with or without transforming it?
 * Perhaps add text length diff to `Operation`s in order to be able validate them
 * Simplify anyundo (large numbers of changesets have to be transformed against each other and an undo changseset)
-* Browsers can run out of memory when en-/decoding large texts in base64, ie. on paste -- it's not ideal
+* Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly
 
 # License
 MIT

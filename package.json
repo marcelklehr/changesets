@@ -1,6 +1,6 @@
 {
   "name": "changesets",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A Changeset library incorporating an operational transformation (OT) algorithm -- for node and the browser!",
   "repository": {
     "type": "git",

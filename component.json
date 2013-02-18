@@ -20,7 +20,14 @@
     "marcelklehr/diff_match_patch": "*"
   },
   "license": "MIT",
+  "main": "lib/index.js",
   "scripts": [
-    "lib/index.js"
+    "lib/index.js",
+    "lib/Operation.js",
+    "lib/text/index.js",
+    "lib/text/Changeset.js",
+    "lib/text/operations/Delete.js",
+    "lib/text/operations/Insert.js",
+    "lib/text/operations/Equal.js"
   ]
 }

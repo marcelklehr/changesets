@@ -149,4 +149,25 @@ suite.addBatch({
   }
 })
 
+suite.addBatch({
+'accessories':
+  { topic: function() {
+      return [engine.constructChangeset("1234", "1234b", 521), engine.constructChangeset("1234", "1234a", 834)]
+    }
+  , 'should cause the same outcome ragardless of the transformation order': function(er, cs) {
+      var text1 = cs[0].transformAgainst(cs[1]).apply( cs[1].apply("1234") )
+      var text2 = cs[1].transformAgainst(cs[0]).apply( cs[0].apply("1234") )
+      console.log(text1, text2)
+      assert.equal(text1, text2)
+    }
+  , 'should be the same after packing and unpacking': function(er, cs) {
+      var acc1 = cs[0][0].accessory
+        , acc2 = engine.Changeset.unpack(cs[0].pack())[0].accessory
+      
+      console.log(acc1, acc2)
+      assert.equal(acc2, acc1)
+    }
+  }
+})
+
 suite.export(module)

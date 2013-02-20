@@ -2,7 +2,7 @@
   "name": "changesets",
   "repo": "marcelklehr/changesets",
   "description": "A Changeset library incorporating an operational transformation (OT) algorithm -- for node and the browser!",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "keywords": [
     "operational transformation",
     "ot",

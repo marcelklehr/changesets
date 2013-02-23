@@ -61,6 +61,8 @@ var suite = vows.describe('changesets: operational transformation of text')
 , ["123", ["1", "1b23"], "1b", "Delete onto Insert; o1.pos = o2.pos, o2.len < o1.len"]
 , ["123", ["1", "1bbb23"], "1bbb", "Delete onto Insert; o1.pos = o2.pos, o1.len < o2.len"]
 , ["123", ["12", "b123"], "b12", "Delete onto Insert; o2.pos+len < o1.pos"]
+// Insert onto nothing
+, ["123", ["1a2b3c", "123"], "1a2b3c", "Insert onto Nothing"]
 ]
 .forEach(function(test, i) {
   var batch = {}

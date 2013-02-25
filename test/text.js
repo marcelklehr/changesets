@@ -172,4 +172,17 @@ suite.addBatch({
   }
 })
 
+suite.addBatch({
+'validation':
+  { topic: function() {
+      var cs = engine.constructChangeset("1234", "1234b")
+      cs.apply(cs.apply("1234"))
+    }
+  , 'should error if you apply the same cs twice, without transforming it': function(er) {
+      console.log(er)
+      assert.throws(er)
+    }
+  }
+})
+
 suite.export(module)

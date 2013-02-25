@@ -126,13 +126,11 @@ This way we effectively exclude the given changes from all following changesets.
 *Changesets* makes use of Neil Fraser's [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts -- an amazing library!
 
 A Changeset, in the context of this lib, is defined as a group of context-equivalent operations. This means, they can be applied in any possible order as long as they're transformed against the previous ones to match the current document state.
-When you call Changeset#apply(), the method first transforms all contained operations on top of each other in a certain order, and then applies them all in sequence on the passed document.
+When you call Changeset#apply(), the method first transforms all contained operations on top of each other in a certain order, and then applies them all in sequence on the passed document. Each operation keeps track of the expected initial text length, so it's easy to detect inconsistencies.
 
 # Todo
-* What happens, if you apply the same CS multiple times, with or without transforming it?
-* Perhaps add text length diff to `Operation`s in order to be able validate them
 * Simplify anyundo (large numbers of changesets have to be transformed against each other and an undo changseset)
-* Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly
+* Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly (?)
 
 # License
 MIT

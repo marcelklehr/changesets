@@ -484,14 +484,15 @@ exports.constructChangeset = function(text1, text2, accessory) {
   
   var i = 0
     , cs = new Changeset
+    , initialLength = text1.length
   diff.forEach(function(d) {
     if (dmp.DIFF_DELETE == d[0]) {
-      cs.push(new Delete(i, d[1], accessory))
+      cs.push(new Delete(initialLength, i, d[1], accessory))
       i += d[1].length
     }
     
     if (dmp.DIFF_INSERT == d[0]) {
-      cs.push(new Insert(i, d[1], accessory))
+      cs.push(new Insert(initialLength, i, d[1], accessory))
     }
     
     if(dmp.DIFF_EQUAL == d[0])
@@ -584,6 +585,7 @@ Changeset.prototype.transformAgainst = function(changeset) {
     
   this.forEach(function(op) {
     changes.forEach(function(o) {
+      if(op instanceof Changeset) return op = op.transformAgainst(new Changeset(o))
       op = op.transformAgainst(o)
     })
     newCs.push(op)
@@ -671,7 +673,7 @@ Changeset.prototype.inspect = function() {
   })
 }
 
-// Hack that sorts out no-ops as well as changesets
+// Hack that sorts out no-ops and cracks up changesets (prevents nested changesets!)
 Changeset.prototype.push = function() {
   var that = this
   for(var i=0; i < arguments.length; i++) {
@@ -689,24 +691,25 @@ Changeset.prototype.push = function() {
 
 /**
  * Serializes the given changeset in order to return a (hopefully) more compact representation
- * that can be sent through a network or stored in a database
+ * than json that can be sent through a network or stored in a database
  *
- * Numbers are converted to the base 36, text is converted to base64 (this is inefficient, I know..)
+ * Numbers are converted to the base 36, unsafe chars in the text are urlencoded
  *
  * @param cs <Changeset> The changeset to be serialized
  * @returns <String> The serialized changeset
  */
 Changeset.prototype.pack = function() {
   var packed = this.map(function(op) {
-    var text = op.text.replace('%', '%25').replace(':', '%3A')
+    var text = op.text.replace(/%/g, '%25').replace(/:/g, '%3A')
       , pos = (op.pos).toString(36)
+      , initialLength = (op.initialLength).toString(36)
       , accessory = (op.accessory).toString(36)
 
     if(op instanceof Delete) {
-      return '-'+pos+':'+text+':'+accessory
+      return '-'+pos+':'+initialLength+':'+text+':'+accessory
     }
     if(op instanceof Insert) {
-      return '+'+pos+':'+text+':'+accessory
+      return '+'+pos+':'+initialLength+':'+text+':'+accessory
     }
   }).join('')
   return packed
@@ -723,7 +726,7 @@ Changeset.prototype.toString = function() {
  */
 Changeset.unpack = function(packed) {
   if(packed == '') return new Changeset
-  var matches = packed.match(/(\+|-)\w+?:[^:]+?:\w+?/g)
+  var matches = packed.match(/(\+|-)\w+?:\w+?:[^:]+?:\w+/g)
   if(!matches) throw new Error('Cannot unpack invalid serialized changeset string')
   
   var cs = new Changeset
@@ -731,18 +734,13 @@ Changeset.unpack = function(packed) {
     var type = s.substr(0,1)
       , props = s.substr(1).split(':')
     var pos = parseInt(props[0], 36)
-      , text = url_decode(props[1])
-      , accessory = parseInt(props[2], 36)
-    if(type == '-') return cs.push(new Delete(pos, text, accessory))
-    if(type == '+') return cs.push(new Insert(pos, text, accessory))
+      , initialLength = parseInt(props[1], 36)
+      , text = props[2].replace(/%3A/gi, ':').replace(/%25/g, '%')
+      , accessory = parseInt(props[3], 36)
+    if(type == '-') return cs.push(new Delete(initialLength, pos, text, accessory))
+    if(type == '+') return cs.push(new Insert(initialLength, pos, text, accessory))
   })
   return cs
-}
-
-
-function url_decode(text) {
-  if('undefined' != typeof window) return decodeURIComponent(text)
-  return require('querystring').unescape(text)
 }
 });
 
@@ -841,9 +839,10 @@ var Operation = require('../../Operation')
  * @param text <String> The string to be inserted
  * @param accessory <Number> Something that breaks the tie (should be different for every editor/source); optional
  */
-function Delete(pos, text, accessory) {
+function Delete(initialLength, pos, text, accessory) {
+  this.initialLength = initialLength
   this.accessory = accessory || 0
-  this.pos = pos
+  this.pos = pos|0
   this.len = text.length
   this.text = text
 }
@@ -867,6 +866,7 @@ var Insert = require('./Insert')
 Delete.prototype.transformAgainst = function(change) {
   // Delete
   if (change instanceof Delete) {
+    var newInitialLength = this.initialLength-change.len
 
     // 'abc' =>  0:-2('c') | 1:-1('ac')
     // 'c'
@@ -874,7 +874,7 @@ Delete.prototype.transformAgainst = function(change) {
       // if the other operation already deleted some of the characters
       // in my range, don't delete them again!
       var startOfOther = Math.min(change.pos - this.pos, this.len)
-      return new Delete(this.pos, this.text.substr(0, startOfOther) + this.text.substr(startOfOther + change.len), this.accessory)
+      return new Delete(newInitialLength, this.pos, this.text.substr(0, startOfOther) + this.text.substr(startOfOther + change.len), this.accessory)
     }
     
     // 'abc'=>   1:-1('ac') | 1:-2('a')
@@ -885,7 +885,7 @@ Delete.prototype.transformAgainst = function(change) {
       if (this.len <= change.len) return new Equal
       
       // the other deletion's range is shorter than mine
-      return new Delete(this.pos, this.text.substr(change.len), this.accessory)
+      return new Delete(newInitialLength, this.pos, this.text.substr(change.len), this.accessory)
     }
     
     // 'abcd'=>   2:-1('abd') | 0:-3('d')
@@ -893,14 +893,14 @@ Delete.prototype.transformAgainst = function(change) {
     if (change.pos < this.pos) {
       var overlap = change.pos+change.len - this.pos // overlap of `change`, starting at `this.pos`
       if(overlap >= this.len) return new Equal
-      if(overlap > 0) return new Delete(change.pos, this.text.substr(overlap), this.accessory)
-      return new Delete(this.pos-change.len, this.text, this.accessory)
+      if(overlap > 0) return new Delete(newInitialLength, change.pos, this.text.substr(overlap), this.accessory)
+      return new Delete(newInitialLength, this.pos-change.len, this.text, this.accessory)
     }
   }
   
   // Insert
   if (change instanceof Insert) {
-
+    var newInitialLength = this.initialLength+change.len
     // 'abc' =>  0:-1('bc') | 3:+x('abcx')
     // 'bcx'
     if (this.pos < change.pos) {
@@ -909,22 +909,22 @@ Delete.prototype.transformAgainst = function(change) {
         // -> split it in to
         var firstHalfLength = change.pos-this.pos
         return new Changeset(
-          new Delete(this.pos, this.text.substr(0, firstHalfLength), this.accessory)
-        , new Delete(change.pos+change.len, this.text.substr(firstHalfLength), this.accessory))
+          new Delete(newInitialLength, this.pos, this.text.substr(0, firstHalfLength), this.accessory)
+        , new Delete(newInitialLength, change.pos+change.len, this.text.substr(firstHalfLength), this.accessory))
       }
-      return new Delete(this.pos, this.text, this.accessory)
+      return new Delete(newInitialLength, this.pos, this.text, this.accessory)
     }
     
     // 'abc'=>   1:-1('ac') | 1:+x('axbc')
     // 'axc'
     if (this.pos == change.pos) {
-      return new Delete(this.pos+change.len, this.text, this.accessory)
+      return new Delete(newInitialLength, this.pos+change.len, this.text, this.accessory)
     }
     
     // 'abc'=>   2:-1('ab') | 0:+x('xabc')
     // 'xab'
     if (change.pos < this.pos) {
-      return new Delete(this.pos+change.len, this.text, this.accessory)
+      return new Delete(newInitialLength, this.pos+change.len, this.text, this.accessory)
     }
   }
   
@@ -954,7 +954,7 @@ Delete.prototype.substract = function(change) {
  * Operation.invert().apply(Operation.apply(text)) == text
  */
 Delete.prototype.invert = function() {
-  return new Insert(this.pos, this.text, this.accessory)
+  return new Insert(this.initialLength, this.pos, this.text, this.accessory)
 }
 
 /**
@@ -963,6 +963,7 @@ Delete.prototype.invert = function() {
  * @param text <String>
  */
 Delete.prototype.apply = function(text) {
+  if(text.length != this.initialLength) throw new Error('Text length doesn\'t match expected length. It\'s most likely you have missed a transformation: expected:'+this.initialLength+', actual:'+text.length)
   if(text.substr(this.pos, this.len) != this.text) throw new Error('Applying delete operation: Passed context doesn\'t match assumed context: '+JSON.stringify(this)+', actual context: "'+text.substr(this.pos, this.len)+'"')
   return text.slice(0, this.pos) + text.slice(this.pos+this.len)
 }
@@ -1003,7 +1004,8 @@ var Operation = require('../../Operation')
  * @param text <String> The string to be inserted
  * @param accessory <Number> Something that breaks the tie (should be different for every editor/source); optional
  */
-function Insert(pos, text, accessory) {
+function Insert(initialLength, pos, text, accessory) {
+  this.initialLength = initialLength
   this.accessory = accessory || 0
   this.pos = pos
   this.len = text.length
@@ -1026,46 +1028,47 @@ var Delete = require('./Delete')
 Insert.prototype.transformAgainst = function(change) {
   // Insert
   if (change instanceof Insert) {
-  
+    var newInitialLength = this.initialLength+change.len
     // 'abc' =>  0:+x('xabc') | 3:+x('abcx')
     // 'xabcx'
     if (this.pos < change.pos) {
-      return new Insert(this.pos, this.text, this.accessory)
+      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
     }
     
     // 'abc'=>   1:+x('axbc') | 1:+y('aybc')
     // 'ayxbc'  -- depends on the accessory (the tie breaker)
     if (this.pos == change.pos && this.accessory < change.accessory) {
-      return new Insert(this.pos, this.text, this.accessory)
+      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
     }
     
     // 'abc'=>   1:+x('axbc') | 0:+x('xabc')
     // 'xaxbc'
     if (change.pos <= this.pos) {
-      return new Insert(this.pos+change.len, this.text, this.accessory)
+      return new Insert(newInitialLength, this.pos+change.len, this.text, this.accessory)
     }
   }
 
   // Delete
   if (change instanceof Delete) {
-  
+    var newInitialLength = this.initialLength-change.len
+    
     // 'abc'=>  1:+x('axbc') | 2:-1('ab')
     // 'axb'
     if (this.pos < change.pos) {
-      return new Insert(this.pos, this.text, this.accessory)
+      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
     }
     
     // 'abc'=>  1:+x('axbc') | 1:-1('ac')
     // 'axb'
     if (this.pos == change.pos) {
-      return new Insert(this.pos, this.text, this.accessory)
+      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
     }
     
     //'abc'=> 2:+x('abxc') | 0:-2('c')
     //'xc'
     if (change.pos < this.pos) {
       // Shift this back by `change.len`, but not more than `change.pos`
-      return new Insert(Math.max(this.pos - change.len, change.pos), this.text, this.accessory)
+      return new Insert(newInitialLength, Math.max(this.pos - change.len, change.pos), this.text, this.accessory)
     }
   }
   
@@ -1095,7 +1098,7 @@ Insert.prototype.substract = function(change) {
  * Operation.invert().apply(Operation.apply(text)) == text
  */
 Insert.prototype.invert = function() {
-  return new Delete(this.pos, this.text, this.accessory)
+  return new Delete(this.initialLength, this.pos, this.text, this.accessory)
 }
 
 /**
@@ -1104,260 +1107,8 @@ Insert.prototype.invert = function() {
  * @param text <String>
  */
 Insert.prototype.apply = function(text) {
+  if(text.length != this.initialLength) throw new Error('Text length doesn\'t match expected length. It\'s most likely you have missed a transformation: expected:'+this.initialLength+', actual:'+text.length)
   return text.slice(0, this.pos) + this.text + text.slice(this.pos)
-}
-
-});
-
-require.define("querystring",function(require,module,exports,__dirname,__filename,process,global){var isArray = typeof Array.isArray === 'function'
-    ? Array.isArray
-    : function (xs) {
-        return Object.prototype.toString.call(xs) === '[object Array]'
-    };
-
-var objectKeys = Object.keys || function objectKeys(object) {
-    if (object !== Object(object)) throw new TypeError('Invalid object');
-    var keys = [];
-    for (var key in object) if (object.hasOwnProperty(key)) keys[keys.length] = key;
-    return keys;
-}
-
-
-/*!
- * querystring
- * Copyright(c) 2010 TJ Holowaychuk <tj@vision-media.ca>
- * MIT Licensed
- */
-
-/**
- * Library version.
- */
-
-exports.version = '0.3.1';
-
-/**
- * Object#toString() ref for stringify().
- */
-
-var toString = Object.prototype.toString;
-
-/**
- * Cache non-integer test regexp.
- */
-
-var notint = /[^0-9]/;
-
-/**
- * Parse the given query `str`, returning an object.
- *
- * @param {String} str
- * @return {Object}
- * @api public
- */
-
-exports.parse = function(str){
-  if (null == str || '' == str) return {};
-
-  function promote(parent, key) {
-    if (parent[key].length == 0) return parent[key] = {};
-    var t = {};
-    for (var i in parent[key]) t[i] = parent[key][i];
-    parent[key] = t;
-    return t;
-  }
-
-  return String(str)
-    .split('&')
-    .reduce(function(ret, pair){
-      try{ 
-        pair = decodeURIComponent(pair.replace(/\+/g, ' '));
-      } catch(e) {
-        // ignore
-      }
-
-      var eql = pair.indexOf('=')
-        , brace = lastBraceInKey(pair)
-        , key = pair.substr(0, brace || eql)
-        , val = pair.substr(brace || eql, pair.length)
-        , val = val.substr(val.indexOf('=') + 1, val.length)
-        , parent = ret;
-
-      // ?foo
-      if ('' == key) key = pair, val = '';
-
-      // nested
-      if (~key.indexOf(']')) {
-        var parts = key.split('[')
-          , len = parts.length
-          , last = len - 1;
-
-        function parse(parts, parent, key) {
-          var part = parts.shift();
-
-          // end
-          if (!part) {
-            if (isArray(parent[key])) {
-              parent[key].push(val);
-            } else if ('object' == typeof parent[key]) {
-              parent[key] = val;
-            } else if ('undefined' == typeof parent[key]) {
-              parent[key] = val;
-            } else {
-              parent[key] = [parent[key], val];
-            }
-          // array
-          } else {
-            obj = parent[key] = parent[key] || [];
-            if (']' == part) {
-              if (isArray(obj)) {
-                if ('' != val) obj.push(val);
-              } else if ('object' == typeof obj) {
-                obj[objectKeys(obj).length] = val;
-              } else {
-                obj = parent[key] = [parent[key], val];
-              }
-            // prop
-            } else if (~part.indexOf(']')) {
-              part = part.substr(0, part.length - 1);
-              if(notint.test(part) && isArray(obj)) obj = promote(parent, key);
-              parse(parts, obj, part);
-            // key
-            } else {
-              if(notint.test(part) && isArray(obj)) obj = promote(parent, key);
-              parse(parts, obj, part);
-            }
-          }
-        }
-
-        parse(parts, parent, 'base');
-      // optimize
-      } else {
-        if (notint.test(key) && isArray(parent.base)) {
-          var t = {};
-          for(var k in parent.base) t[k] = parent.base[k];
-          parent.base = t;
-        }
-        set(parent.base, key, val);
-      }
-
-      return ret;
-    }, {base: {}}).base;
-};
-
-/**
- * Turn the given `obj` into a query string
- *
- * @param {Object} obj
- * @return {String}
- * @api public
- */
-
-var stringify = exports.stringify = function(obj, prefix) {
-  if (isArray(obj)) {
-    return stringifyArray(obj, prefix);
-  } else if ('[object Object]' == toString.call(obj)) {
-    return stringifyObject(obj, prefix);
-  } else if ('string' == typeof obj) {
-    return stringifyString(obj, prefix);
-  } else {
-    return prefix;
-  }
-};
-
-/**
- * Stringify the given `str`.
- *
- * @param {String} str
- * @param {String} prefix
- * @return {String}
- * @api private
- */
-
-function stringifyString(str, prefix) {
-  if (!prefix) throw new TypeError('stringify expects an object');
-  return prefix + '=' + encodeURIComponent(str);
-}
-
-/**
- * Stringify the given `arr`.
- *
- * @param {Array} arr
- * @param {String} prefix
- * @return {String}
- * @api private
- */
-
-function stringifyArray(arr, prefix) {
-  var ret = [];
-  if (!prefix) throw new TypeError('stringify expects an object');
-  for (var i = 0; i < arr.length; i++) {
-    ret.push(stringify(arr[i], prefix + '[]'));
-  }
-  return ret.join('&');
-}
-
-/**
- * Stringify the given `obj`.
- *
- * @param {Object} obj
- * @param {String} prefix
- * @return {String}
- * @api private
- */
-
-function stringifyObject(obj, prefix) {
-  var ret = []
-    , keys = objectKeys(obj)
-    , key;
-  for (var i = 0, len = keys.length; i < len; ++i) {
-    key = keys[i];
-    ret.push(stringify(obj[key], prefix
-      ? prefix + '[' + encodeURIComponent(key) + ']'
-      : encodeURIComponent(key)));
-  }
-  return ret.join('&');
-}
-
-/**
- * Set `obj`'s `key` to `val` respecting
- * the weird and wonderful syntax of a qs,
- * where "foo=bar&foo=baz" becomes an array.
- *
- * @param {Object} obj
- * @param {String} key
- * @param {String} val
- * @api private
- */
-
-function set(obj, key, val) {
-  var v = obj[key];
-  if (undefined === v) {
-    obj[key] = val;
-  } else if (isArray(v)) {
-    v.push(val);
-  } else {
-    obj[key] = [v, val];
-  }
-}
-
-/**
- * Locate last brace in `str` within the key.
- *
- * @param {String} str
- * @return {Number}
- * @api private
- */
-
-function lastBraceInKey(str) {
-  var len = str.length
-    , brace
-    , c;
-  for (var i = 0; i < len; ++i) {
-    c = str[i];
-    if (']' == c) brace = false;
-    if ('[' == c) brace = true;
-    if ('=' == c && !brace) return i;
-  }
 }
 
 });

@@ -109,7 +109,7 @@ var suite = vows.describe('changesets: operational transformation of text')
 , [["1234", "123", "12"], "124", "Delete minus Delete; o2.pos < o1.pos"]
 // Mixed ET
 , [["1234", "2bc3", "2abc3"], "12a34", "Mixed ET 1"]
-, [["1234", "d2bc", "da2abc"], "1a234a", "Mixed ET 2"]
+, [["1234", "d2bc", "da2abc"], "1234aa", "Mixed ET 2"]// yea. this is because of using cleanup_efficiency
 ]
 .forEach(function(test, i) {
   var batch = {}
@@ -149,6 +149,41 @@ suite.addBatch({
       assert.deepEqual(unpacked, cs)
     }
   }
+})
+
+// Invert
+
+;// Inverting Insert
+[ ["123", "123b", "Insert at the end"]
+, ["123", "b123", "Insert at the beginning"]
+, ["123", "1b23", "Insert in the middle"]
+// Inverting Delete
+, ["123", "12", "Delete at the end"]
+, ["123", "23", "Delete at the beginning"]
+, ["123", "13", "Delete in the middle"]
+// Inverting Equal
+, ["123", "123", "Identity"]
+]
+.forEach(function(test, i) {
+  var batch = {}
+  batch[test[2]] = {
+      topic: function() {
+        var cs1 = engine.constructChangeset(test[0], test[1], 1)
+          , cs2 = cs1.invert()
+
+        console.log("\n\n "+test[0]+": inverting ", test[1])
+        console.dir(cs1.inspect())
+        console.dir(cs2.inspect())
+
+        var text = cs1.apply(test[0])
+        return cs2.apply(text)
+      },
+      'should be correctly inverted': function(err, text) {
+        assert.ifError(err)
+        assert.equal(test[0], text)
+      }
+    }
+  suite.addBatch(batch)
 })
 
 suite.addBatch({

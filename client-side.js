@@ -432,7 +432,7 @@ process.binding = function (name) {
 
 });
 
-require.define("/lib/text/index.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+require.define("/lib/text/index.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -520,7 +520,7 @@ exports.unpack = function(packed) {
 }
 });
 
-require.define("/lib/text/Changeset.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+require.define("/lib/text/Changeset.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -650,17 +650,17 @@ Changeset.prototype.invert = function() {
 }
 
 /**
- * Returns the inverse Operation of the current one
- * 
- * Operation.invert().apply(Operation.apply(state)) == state
+ * Applies this operation on the passed text
+ *
+ * @param text <String>
  */
-Changeset.prototype.apply = function(resource) {
+Changeset.prototype.apply = function(text) {
   var changes = this.sequencify()
   changes.forEach(function(op) {
-    resource = op.apply(resource)
+    text = op.apply(text)
   })
   
-  return resource
+  return text
 }
 
 /**
@@ -744,7 +744,7 @@ Changeset.unpack = function(packed) {
 }
 });
 
-require.define("/lib/text/operations/Equal.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+require.define("/lib/text/operations/Equal.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -800,12 +800,12 @@ Equal.prototype.apply = function(text) {
 }
 });
 
-require.define("/lib/Operation.js",function(require,module,exports,__dirname,__filename,process,global){﻿module.exports = function Operation() {
+require.define("/lib/Operation.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = function Operation() {
 }
 
 });
 
-require.define("/lib/text/operations/Delete.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+require.define("/lib/text/operations/Delete.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -970,7 +970,7 @@ Delete.prototype.apply = function(text) {
 
 });
 
-require.define("/lib/text/operations/Insert.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+require.define("/lib/text/operations/Insert.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -3261,7 +3261,7 @@ exports['DIFF_EQUAL'] = DIFF_EQUAL;
 
 });
 
-require.define("/lib/index.js",function(require,module,exports,__dirname,__filename,process,global){﻿exports.text = require('./text/index')
+require.define("/lib/index.js",function(require,module,exports,__dirname,__filename,process,global){exports.text = require('./text/index')
 exports.Operation = require('./Operation')
 
 if('undefined' != typeof window) window.changesets = exports

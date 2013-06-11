@@ -1,4 +1,3 @@
-﻿
 # changesets
 build text-based concurrent multi-user applications using operational transformation!
 

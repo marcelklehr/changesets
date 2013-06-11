@@ -131,6 +131,11 @@ When you call Changeset#apply(), the method first transforms all contained opera
 # Todo
 * Simplify anyundo (large numbers of changesets have to be transformed against each other and an undo changseset)
 * Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly (?)
+* validate function args!
+* add support for attributed text
+* every content type should have some pre-defined initial content (e.g. text would be '')
+* How to solve the false tie (FT) puzzle? I think it's possible using user identifiers! -- https://code.google.com/p/lightwave/source/browse/trunk/experimental/ot/README
+
 
 # License
 MIT

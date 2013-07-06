@@ -35,6 +35,7 @@ var suite = vows.describe('changesets: operational transformation of text')
 // IT
 
 ;// Insert onto Insert
+var ITset = 
 [ ["123", ["a123", "123b"], "a123b", "Insert onto Insert; o1.pos < o2.pos"]
 , ["123", ["1a23", "1b23"], "1ab23", "Insert onto Insert; o1.pos = o2.pos"]
 , ["123", ["12a3", "b123"], "b12a3", "Insert onto Insert; o2.pos < o1.pos"]
@@ -64,7 +65,7 @@ var suite = vows.describe('changesets: operational transformation of text')
 // Insert onto nothing
 , ["123", ["1a2b3c", "123"], "1a2b3c", "Insert onto Nothing"]
 ]
-.forEach(function(test, i) {
+ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
@@ -81,6 +82,33 @@ var suite = vows.describe('changesets: operational transformation of text')
         return cs1.apply(cs2.apply(test[0]))
       },
       'should be correctly transformed using inclusion transformation': function(err, text) {
+        assert.ifError(err)
+        assert.equal(test[2], text)
+      }
+    }
+  suite.addBatch(batch)
+})
+
+// MERGING
+
+ITset.forEach(function(test, i) {
+  var batch = {}
+  batch[test[3]] = {
+      topic: function() {
+        var cs1 = engine.constructChangeset(test[0],test[1][0], 1)
+          , cs2 = engine.constructChangeset(test[0],test[1][1], 2)
+          , merged
+
+        console.log("\n\n", test[0]+': merging')        
+        console.dir(cs1.inspect())
+        console.dir(cs2.inspect())
+
+        merged = cs1.merge(cs2)
+        console.log('=>', merged.inspect())
+
+        return merged.apply(test[0])
+      },
+      'should be correctly merged': function(err, text) {
         assert.ifError(err)
         assert.equal(test[2], text)
       }
@@ -168,10 +196,11 @@ suite.addBatch({
   var batch = {}
   batch[test[2]] = {
       topic: function() {
+        console.log("\n\n "+test[0]+": inverting ", test[1])
+      
         var cs1 = engine.constructChangeset(test[0], test[1], 1)
           , cs2 = cs1.invert()
 
-        console.log("\n\n "+test[0]+": inverting ", test[1])
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
@@ -185,7 +214,7 @@ suite.addBatch({
     }
   suite.addBatch(batch)
 })
-
+/*
 suite.addBatch({
 'accessories':
   { topic: function() {
@@ -219,5 +248,5 @@ suite.addBatch({
     }
   }
 })
-
+/**/
 suite.export(module)

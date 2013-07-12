@@ -69,14 +69,14 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0],test[1][0], 1)
-          , cs2 = engine.constructChangeset(test[0],test[1][1], 2)
+        var cs1 = engine.constructChangeset(test[0],test[1][0])
+          , cs2 = engine.constructChangeset(test[0],test[1][1])
 
         console.log("\n\n", test[0])        
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
-        cs1 = cs1.transformAgainst(cs2)
+        cs1 = cs1.transformAgainst(cs2, /*left:*/true)
         console.log('=>', cs1.inspect())
 
         return cs1.apply(cs2.apply(test[0]))
@@ -95,15 +95,15 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0],test[1][0], 1)
-          , cs2 = engine.constructChangeset(test[0],test[1][1], 2)
+        var cs1 = engine.constructChangeset(test[0],test[1][0])
+          , cs2 = engine.constructChangeset(test[0],test[1][1])
           , merged
 
         console.log("\n\n", test[0]+': merging')        
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
-        merged = cs1.merge(cs2)
+        merged = cs1.merge(cs2, /*left:*/true)
         console.log('=>', merged.inspect())
 
         return merged.apply(test[0])
@@ -124,7 +124,7 @@ ITset.forEach(function(test, i) {
 , [["123", "bb123", "bab123"], "a123", "Insert minus Insert; o1.pos < o2.pos < o1.pos+len"]
 // Insert minus Delete
 , [["1234", "124", "a124"], "a1234", "Insert minus Delete; o2.pos < o1.pos"]
-, [["1234", "134", "1a34"], "12a34", "Insert minus Delete; o2.pos = o1.pos"]
+, [["1234", "134", "1a34"], "1a234", "Insert minus Delete; o2.pos = o1.pos"]
 , [["1234", "34", "3a4"], "123a4", "Insert minus Delete; o1.pos < o2.pos"]
 // Delete minus Insert
 , [["123", "a123", "a13"], "13", "Delete minus Insert; o1.pos < o2.pos"]
@@ -143,14 +143,14 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[2]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0][0],test[0][1], 1)
-          , cs2 = engine.constructChangeset(test[0][1],test[0][2], 2)
+        var cs1 = engine.constructChangeset(test[0][0],test[0][1])
+          , cs2 = engine.constructChangeset(test[0][1],test[0][2])
 
         console.log("\n\n "+test[0][0]+":", test[0][2], '-', test[0][1])
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
-        cs2 = cs2.substract(cs1)
+        cs2 = cs2.substract(cs1, /*left:*/true)
         console.log('=>', cs2.inspect())
 
         return cs2.apply(test[0][0])
@@ -198,7 +198,7 @@ suite.addBatch({
       topic: function() {
         console.log("\n\n "+test[0]+": inverting ", test[1])
       
-        var cs1 = engine.constructChangeset(test[0], test[1], 1)
+        var cs1 = engine.constructChangeset(test[0], test[1])
           , cs2 = cs1.invert()
 
         console.dir(cs1.inspect())
@@ -214,24 +214,17 @@ suite.addBatch({
     }
   suite.addBatch(batch)
 })
-/*
+
 suite.addBatch({
 'accessories':
   { topic: function() {
-      return [engine.constructChangeset("1234", "1234b", 521), engine.constructChangeset("1234", "1234a", 834)]
+      return [engine.constructChangeset("1234", "1234b"), engine.constructChangeset("1234", "1234a")]
     }
   , 'should cause the same outcome ragardless of the transformation order': function(er, cs) {
-      var text1 = cs[0].transformAgainst(cs[1]).apply( cs[1].apply("1234") )
-      var text2 = cs[1].transformAgainst(cs[0]).apply( cs[0].apply("1234") )
+      var text1 = cs[0].transformAgainst(cs[1], /*left:*/true).apply( cs[1].apply("1234") )
+      var text2 = cs[1].transformAgainst(cs[0], /*left:*/false).apply( cs[0].apply("1234") )
       console.log(text1, text2)
       assert.equal(text1, text2)
-    }
-  , 'should be the same after packing and unpacking': function(er, cs) {
-      var acc1 = cs[0][0].accessory
-        , acc2 = engine.Changeset.unpack(cs[0].pack())[0].accessory
-      
-      console.log(acc1, acc2)
-      assert.equal(acc2, acc1)
     }
   }
 })
@@ -239,10 +232,13 @@ suite.addBatch({
 suite.addBatch({
 'validation':
   { topic: function() {
-      var cs = engine.constructChangeset("1234", "1234b")
+      var cs = engine.constructChangeset("1234", "12a34b")
       cs.apply(cs.apply("1234"))
+      
+      returnthis.callback()
     }
   , 'should error if you apply the same cs twice, without transforming it': function(er) {
+      if(!er) assert(false)
       console.log(er)
       assert.throws(er)
     }

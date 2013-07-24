@@ -5,7 +5,7 @@ build text-based concurrent multi-user applications using operational transforma
 
 *changesets* allows you to easily create changesets and apply them on all sites of a distributed system using Operational Transformation. It was built with the following requirements in mind:
 
-* intention preservation (no content corruption; your edits always have the same effect)
+* intention preservation (no content corruption; your edits always have the same effect, as long as they are applied in a consistent order)
 * reversibility/invertibility (undo any edit without corrupting the content or the state)
 * convergence (everybody sees the same state)
 
@@ -39,7 +39,7 @@ Construct a changeset between two texts:
 ```js
 var changes = Changeset.fromDiff(text1, text2)
 ```
-You get a `cs.text.Changeset` object containing multiple `cs.Operation`s. The changeset can be applied to a text as follows:
+You get a `Changeset` object containing multiple `Operation`s. The changeset can be applied to a text as follows:
 ```js
 var finalText = changes.apply(text1)
 

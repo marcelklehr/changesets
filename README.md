@@ -23,7 +23,7 @@ In case the above question just came to your mind, you better start with [Wikipe
 In node (and using component), simply require `'changesets'`
 
 ```js
-var cs = require('changesets')
+var Changeset = require('changesets').Changeset
 ```
 
 If you're not using component in the browser, you need to load the package as a browserified javascript file...
@@ -37,7 +37,7 @@ If you're not using component in the browser, you need to load the package as a 
 ### Constructing and applying changesets
 Construct a changeset between two texts:
 ```js
-var changes = cs.text.constructChangeset(text1, text2)
+var changes = Changeset.fromDiff(text1, text2)
 ```
 You get a `cs.text.Changeset` object containing multiple `cs.Operation`s. The changeset can be applied to a text as follows:
 ```js
@@ -56,7 +56,7 @@ var serialized = changeset.pack() // '=5-1+2=2+5=6+b|habeen -ish thing.|i'
 
 `Changeset.unpack()` takes the output of `Changeset#pack()` and returns a changeset object.
 ```js
-cs.text.Changeset.unpack(serialized) // {"0":{"length":5,"symbol":"="},"1":{"length":1,"symbol":"-"},"2":{"length":2,"symbol":"+"},"3":{"length":2,"sym ...
+Changeset.unpack(serialized) // {"0":{"length":5,"symbol":"="},"1":{"length":1,"symbol":"-"},"2":{"length":2,"symbol":"+"},"3":{"length":2,"sym ...
 ```
 
 If you'd like to display a changeset in a humanly readable form, use `Changeset#inspect` (which is aliased to Changeset#toString):
@@ -82,8 +82,8 @@ var text = "Hello adventurer!"
 Now, what do you do? As a human you're certainly able to make out the changes and tell what's been changed to combine both revisions, but a machine is hard put to do so without proper guidance. And this is where this library comes in. Firstly, you'll need to extract the changes in each version.
 
 ```js
-var csA = cs.text.constructChangeset(text, textA)
-var csB = cs.text.constructChangeset(text, textB)
+var csA = Changeset.fromDiff(text, textA)
+var csB = Changeset.fromDiff(text, textB)
 ```
 
 Now we can send the changes through the network in an eficient way and if we apply them on the original text on the other end we get the full contents of revision A again.
@@ -130,7 +130,7 @@ var versions =
 
 var edits = []
 for (var i=1; i < versions.length; i++) {
-  edits.push( cs.text.constructChangeset(text[i-1], text[i]) )
+  edits.push( Changeset.fromDiff(text[i-1], text[i]) )
 }
 ```
 

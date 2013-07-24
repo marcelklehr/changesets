@@ -27,7 +27,7 @@ var vows = require('vows')
   , assert = require('assert')
 
 var changesets = require('../lib')
-  , engine = changesets.text
+  , engine = changesets
 
 
 var suite = vows.describe('changesets: operational transformation of text')

@@ -432,7 +432,7 @@ process.binding = function (name) {
 
 });
 
-require.define("/lib/text/index.js",function(require,module,exports,__dirname,__filename,process,global){/*!
+require.define("/lib/Changeset.js",function(require,module,exports,__dirname,__filename,process,global){/*!
  * changesets
  * A Changeset library incorporating operational transformation (OT)
  * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
@@ -457,98 +457,14 @@ require.define("/lib/text/index.js",function(require,module,exports,__dirname,__
  * THE SOFTWARE.
  */
 
-var Changeset = require('./Changeset')
-  , Delete = require('./operations/Delete')
-  , Insert = require('./operations/Insert')
-  , dmp = require('diff_match_patch')
+var dmp = require('diff_match_patch')
   , engine = new dmp.diff_match_patch
 
 // Don't optimize time if diffs become less optimal
 engine.Diff_Timeout = 0
 
-exports.Changeset = Changeset
-exports.Insert = Insert
-exports.Delete = Delete
-  
 /**
- * Returns a Changeset containing the operations needed to transform text1 into text2
- * 
- * @param text1 <String>
- * @param text2 <String>
- * @param accessory <Number> tie breaker; optional (only necessary in a distributed environment, should be different for every editor/source)
- */
-exports.constructChangeset = function(text1, text2, accessory) {
-  accessory = accessory || 0
-  var diff = engine.diff_main(text1, text2, /* checkLines: */ false)
-  //engine.diff_cleanupEfficiency(diff)
-  
-  var i = 0
-    , cs = new Changeset
-    , initialLength = text1.length
-  diff.forEach(function(d) {
-    if (dmp.DIFF_DELETE == d[0]) {
-      cs.push(new Delete(initialLength, i, d[1], accessory))
-      i += d[1].length
-    }
-    
-    if (dmp.DIFF_INSERT == d[0]) {
-      cs.push(new Insert(initialLength, i, d[1], accessory))
-    }
-    
-    if(dmp.DIFF_EQUAL == d[0])
-      i += d[1].length
-  })
-  
-  return cs
-}
-
-/**
- * Serializes the given changeset in order to return a (hopefully) more compact representation
- * that can be sent through a network or stored in a database
- * @alias cs.text.Changeset#pack
- */
-exports.pack = function(cs) {
-  return cs.pack()
-}
-
-/**
- * Unserializes the output of cs.text.pack
- * @alias cs.text.Changeset.unpack
- */
-exports.unpack = function(packed) {
-  return Changeset.unpack(packed)
-}
-});
-
-require.define("/lib/text/Changeset.js",function(require,module,exports,__dirname,__filename,process,global){/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-/**
- * A list (in no particular order) of context-equivalent operations
- * (use Changeset#sequencify() to get an array of transformed
- * ops that can be applied on a document in sequence)
+ * A sequence of consecutive operations
  *
  * @param ops.. <Operation> all passed operations will be added to the changeset
  */
@@ -556,40 +472,212 @@ function Changeset() {
   for(var i=0; i<arguments.length; i++) {
     this.push(arguments[i])
   }
+  this.addendum = ""
+  this.removendum = ""
+  this.initialLength = 0
 }
 
-Changeset.prototype = new Array
-Changeset.prototype.constructor = Changeset
+// True inheritance
+Changeset.prototype = Object.create(Array.prototype, {
+  constructor: {
+    value: Changeset,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
 module.exports = Changeset
 
-var Equal = require('./operations/Equal')
-  , Delete = require('./operations/Delete')
+var Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
   , Insert = require('./operations/Insert')
+
+  
+Changeset.prototype.push = function(op) {
+  if(op instanceof Retain || op instanceof Skip) this.initialLength += op.length
+  return Array.prototype.push.apply(this, arguments)
+}
+
+/**
+ * Merge two changesets (that are based on the same state!) so that the resulting changseset
+ * has the same effect as both orignal ones applied one after the other
+ *
+ * @param otherCs <Changeset>
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely))
+ * @returns <Changeset>
+ */
+Changeset.prototype.merge = function(otherCs, left) {
+  if(!(otherCs instanceof Changeset)) {
+    throw new Error('Argument must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
+  }
+  
+  var newCs = new Changeset
+    , pointers1 = {
+        addendum: 0
+      , removendum: 0
+      , input: 0
+      }
+    , pointers2 = {
+        addendum: 0
+      , removendum: 0
+      , input: 0
+      }
+  
+  zip(this, otherCs, function(op1, op2) {
+    // console.log(newCs.inspect())
+    // console.log(op1, op2)
+
+    if(op1 instanceof Insert && (!(op2 instanceof Insert) || left)) { // if it's a tie -- "left" breaks it.
+      newCs.push(new Insert(op1.length))
+      newCs.addendum += this.addendum.substr(pointers1.addendum, op1.length) // overtake added chars
+      op1.applyDry(pointers1)
+      op1.length = 0 // don't gimme that one again.
+      return
+    }
+    
+    if(op2 instanceof Insert && (!(op1 instanceof Insert) || !left)) {// if it's a tie -- "left" breaks it.
+      newCs.push(new Insert(op2.length))
+      newCs.addendum += otherCs.addendum.substr(pointers2.addendum, op2.length) // overtake added chars
+      op2.applyDry(pointers2)
+      op2.length = 0 // don't gimme that one again.
+      return
+    }
+    
+    if(op2 instanceof Skip) {
+      newCs.push(new Skip(op2.length))
+      newCs.removendum += otherCs.removendum.substr(pointers2.removendum, op2.length) // overtake removed chars
+      op2.applyDry(pointers2)
+      if(op1) op1.length = 0 // don't gimme these again.
+      op2.length = 0
+      return
+    }
+    
+    if(op1 instanceof Skip) {
+      newCs.push(new Skip(op1.length))
+      newCs.removendum += this.removendum.substr(pointers1.removendum, op1.length) // overtake removed chars
+      op1.applyDry(pointers1)
+      op1.length = 0 // don't gimme that one again.
+      if(op2) op2.length = 0
+      return
+    }
+    
+    if(op1 instanceof Retain) {
+      newCs.push(new Retain(op1.length))
+      op1.length = 0 // don't gimme these again.
+      if(op2) op2.length = 0
+      return
+    }
+    
+    console.log('oops')
+    throw new Error('oops. This case hasn\'t been considered by the developer (error code: PBCAC)')
+  }.bind(this))
+  
+  return newCs
+}
+
+/**
+ * A private and quite handy function that slices ops into equally long pieces and applies them on a mapping function
+ * that can determine the iteration steps by setting op.length to 0 on an op (equals using .next() in a usual iterator)
+ */
+function zip(cs1, cs2, func) {
+  var opstack1 = cs1.map(function(op) {return op.clone()}) // copy ops
+    , opstack2 = cs2.map(function(op) {return op.clone()})
+  
+  var op2, op1
+  while(opstack1.length || opstack2.length) {// iterate through all outstanding ops of this cs
+    op1 = opstack1[0]? opstack1[0].clone() : null
+    op2 = opstack2[0]? opstack2[0].clone() : null
+    
+    if(op1) {
+      if(op2) op1.length = Math.min(op1.length, op2.length) // slice 'em into equally long pieces
+      if(opstack1[0].length > op1.length) opstack1[0].length -= op1.length
+      else opstack1.shift()
+    }
+    
+    if(op2) {
+      if(op1) op2.length = Math.min(op1.length, op2.length) // slice 'em into equally long pieces
+      if(opstack2[0].length > op2.length) opstack2[0].length -= op2.length
+      else opstack2.shift()
+    }
+
+    func(op1, op2)
+    
+    if(op1 && op1.length) opstack1.unshift(op1)
+    if(op2 && op2.length) opstack2.unshift(op2)
+  }
+}
+
 
 /**
  * Inclusion Transformation (IT) or Forward Transformation
  *
  * transforms the operations of the current changeset against the
  * all operations in another changeset in such a way that the
- * impact of the latter are effectively included
+ * effects of the latter are effectively included
+ * 
+ * @param otherCs <Changeset>
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
  * 
  * @returns <Changeset>
  */
-Changeset.prototype.transformAgainst = function(changeset) {
-  if(!(changeset instanceof Changeset)) {
-    throw new Error('Argument must be a #<Changeset>, but received '+changeset.__proto__.constructor.name)
+Changeset.prototype.transformAgainst = function(otherCs, left) {
+  if(!(otherCs instanceof Changeset)) {
+    throw new Error('Argument must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
   }
   
   var newCs = new Changeset
-    , changes = changeset.sequencify()
+    , pointers = {
+        addendum: 0
+      , removendum: 0
+      , input: 0
+      }
+  
+  // overtake addendum
+  newCs.addendum = this.addendum
+  
+  zip(this, otherCs, function(op1, op2) {
+    // console.log(newCs.inspect())
+    // console.log(op1, op2)
     
-  this.forEach(function(op) {
-    changes.forEach(function(o) {
-      if(op instanceof Changeset) return op = op.transformAgainst(new Changeset(o))
-      op = op.transformAgainst(o)
-    })
-    newCs.push(op)
-  })
+    if(op1 instanceof Insert && (!(op2 instanceof Insert) || left)) {// if it's a tie -- "left" breaks it.
+      newCs.push(new Insert(op1.length))
+      op1.length = 0 // don't gimme that one again.
+      return
+    }
+    
+    if(op2 instanceof Insert && (!(op1 instanceof Insert) || !left)) {// if it's a tie -- "left" breaks it.
+      newCs.push(new Retain(op2.length))
+      op2.length = 0 // don't gimme that one again.
+      return
+    }
+    
+    if(op2 instanceof Skip) {
+      // don't overtake op1
+      if(op1 instanceof Skip) op1.applyDry(pointers) // also, don't overtake removed chars
+      if(op1) op1.length = 0 // don't gimme these again.
+      op2.length = 0
+      return
+    }
+    
+    if(op1 instanceof Skip) {
+      newCs.push(new Skip(op1.length))
+      newCs.removendum += this.removendum.substr(pointers.removendum, op1.length) // overtake removed chars
+      op1.applyDry(pointers)
+      op1.length = 0 // don't gimme that one again.
+      if(op2) op2.length = 0
+      return
+    }
+    
+    if(op1 instanceof Retain) {
+      newCs.push(new Retain(op1.length))
+      op1.length = 0 // don't gimme these again.
+      if(op2) op2.length = 0
+      return
+    }
+    
+    console.log('oops')
+    throw new Error('oops. This case hasn\'t been considered by the developer (error code: PBCAC)')
+  }.bind(this))
   
   return newCs
 }
@@ -599,41 +687,17 @@ Changeset.prototype.transformAgainst = function(changeset) {
  * 
  * transforms all operations in the current changeset against the operations
  * in another changeset in such a way that the impact of the latter are effectively excluded
- * 
+ *
+ * @param changeset <Changeset> the changeset to substract from this one
+ * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
  * @returns <Changeset>
  */
-Changeset.prototype.substract = function(changeset) {
+Changeset.prototype.substract = function(changeset, left) {
   // The current operations assume that the changes in
   // `changeset` happened before, so for each of those ops
   // we create an operation that undoes its effect and
   // transform all our operations on top of the inverse changes
-  var changes = Changeset.prototype.invert.apply(changeset.sequencify())
-  return this.transformAgainst(changes)
-}
-
-/**
- * Transforms all contained operations against each
- * other in sequence and returns an array of those new operations
- *
- * @returns <Array>
- * Used internally
- */
-Changeset.prototype.sequencify = function() {
-  var result = []
-  this.forEach(function(op) {
-    if(op instanceof Equal) return
-    
-    // transform against all previous ops
-    result.forEach(function(o) {
-      //console.log(op.__proto__.constructor.name+' '+op.pos+':'+op.text, '->',o.__proto__.constructor.name+' '+o.pos+':'+o.text)
-      op = op.transformAgainst(o)
-    })
-    //console.log('=',op.__proto__.constructor.name+' '+op.pos+':'+op.text)
-    //  console.log()
-    // ... and add it on top of them
-    result.push(op)
-  })
-  return result
+  return this.transformAgainst(changeset.invert(), left)
 }
 
 /**
@@ -643,50 +707,57 @@ Changeset.prototype.sequencify = function() {
  */
 Changeset.prototype.invert = function() {
   var newCs = new Changeset
+  
+  // removendum becomes addendum and vice versa
+  newCs.addendum = this.removendum
+  newCs.removendum = this.addendum
+  
+  // invert all ops
   this.forEach(function(op) {
     newCs.push(op.invert())
   })
+
   return newCs
 }
 
 /**
- * Applies this operation on the passed text
- *
- * @param text <String>
+ * Applies this changeset on a text
  */
-Changeset.prototype.apply = function(text) {
-  var changes = this.sequencify()
-  changes.forEach(function(op) {
-    text = op.apply(text)
-  })
+Changeset.prototype.apply = function(input) {
+  // pre-requisites
+  if(input.length != this.initialLength) throw new Error('Input length doesn\'t match expected length.')
   
-  return text
+  var pointers = {
+    addendum: 0
+  , input: 0
+  }
+  var output = ""
+
+  this.forEach(function(op) {
+    // each Operation has access to all pointers as well as the input, addendum and removendum (the latter are immutable)
+    output += op.apply(pointers, input, this.addendum)
+  }.bind(this))
+
+  return output
 }
 
 /**
  * Returns an array of strings describing this changeset's operations
  */
 Changeset.prototype.inspect = function() {
+  var j = 0
   return this.map(function(op) {
-    if(op.__proto__) return op.__proto__.constructor.name+' '+op.pos+':'+op.text
-    return (op instanceof Insert? 'Insert' : 'Delete')+' '+op.pos+':'+op.text
-  })
-}
+    var string = ''
 
-// Hack that sorts out no-ops and cracks up changesets (prevents nested changesets!)
-Changeset.prototype.push = function() {
-  var that = this
-  for(var i=0; i < arguments.length; i++) {
-    if(arguments[i] instanceof Equal) continue;
-    if(arguments[i] instanceof Changeset) {
-      arguments[i].forEach(function(op) {
-        that.push(op)
-      })
-      continue;
+    if(op instanceof Insert) {
+      string = this.addendum.substr(j,op.length)
+      j += op.length
+      return string
     }
-    Array.prototype.push.call(this, arguments[i])
-  }
-  return this
+    
+    for(var i=0; i<op.length; i++) string += op.symbol
+    return string
+  }.bind(this)).join('')
 }
 
 /**
@@ -700,19 +771,12 @@ Changeset.prototype.push = function() {
  */
 Changeset.prototype.pack = function() {
   var packed = this.map(function(op) {
-    var text = op.text.replace(/%/g, '%25').replace(/:/g, '%3A')
-      , pos = (op.pos).toString(36)
-      , initialLength = (op.initialLength).toString(36)
-      , accessory = (op.accessory).toString(36)
-
-    if(op instanceof Delete) {
-      return '-'+pos+':'+initialLength+':'+text+':'+accessory
-    }
-    if(op instanceof Insert) {
-      return '+'+pos+':'+initialLength+':'+text+':'+accessory
-    }
+    return op.symbol+(op.length).toString(36)
   }).join('')
-  return packed
+  
+  var addendum = this.addendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
+    , removendum = this.removendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
+  return packed+'|'+addendum+'|'+removendum
 }
 Changeset.prototype.toString = function() {
   return this.pack()
@@ -725,392 +789,58 @@ Changeset.prototype.toString = function() {
  * @param <cs.Changeset>
  */
 Changeset.unpack = function(packed) {
-  if(packed == '') return new Changeset
-  var matches = packed.match(/(\+|-)\w+?:\w+?:[^:]+?:\w+/g)
-  if(!matches) throw new Error('Cannot unpack invalid serialized changeset string')
+  if(packed == '') throw new Error('Cannot unpack from empty string')
+  var components = packed.split('|')
+    , opstring = components[0]
+    , addendum = components[1].replace(/%7c/gi, '|').replace(/%25/g, '%')
+    , removendum = components[2].replace(/%7c/gi, '|').replace(/%25/g, '%')
+
+  var matches = packed.match(/(\+|-|=)\w+?/g)
+  if(!matches) throw new Error('Cannot unpack invalid serialized op string')
   
   var cs = new Changeset
+  cs.addendum = addendum
+  cs.removendum = removendum
+  
   matches.forEach(function(s) {
-    var type = s.substr(0,1)
-      , props = s.substr(1).split(':')
-    var pos = parseInt(props[0], 36)
-      , initialLength = parseInt(props[1], 36)
-      , text = props[2].replace(/%3A/gi, ':').replace(/%25/g, '%')
-      , accessory = parseInt(props[3], 36)
-    if(type == '-') return cs.push(new Delete(initialLength, pos, text, accessory))
-    if(type == '+') return cs.push(new Insert(initialLength, pos, text, accessory))
+    var symbol = s.substr(0,1)
+      , length = parseInt(s.substr(1), 36)
+    if('-' == symbol) return cs.push(new Skip(length))
+    if('+' == symbol) return cs.push(new Insert(length))
+    if('=' == symbol) return cs.push(new Retain(length))
   })
   return cs
 }
-});
-
-require.define("/lib/text/operations/Equal.js",function(require,module,exports,__dirname,__filename,process,global){/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Operation = require('../../Operation')
 
 /**
- * Equal Operation
- * Defined by:
- * @param accessory <Number> Something that breaks the tie (should be different for every editor/source); optional
- */
-function Equal(accessory) {
-  this.accessory = accessory || 0
-}
-Equal.prototype = new Operation
-Equal.prototype.constructor = Equal
-module.exports = Equal
-
-Equal.prototype.transformAgainst = function() {
-  return this
-}
-
-Equal.prototype.substract = function() {
-  return this
-}
-
-Equal.prototype.invert = function() {
-  return this
-}
-
-Equal.prototype.apply = function(text) {
-  return text
-}
-});
-
-require.define("/lib/Operation.js",function(require,module,exports,__dirname,__filename,process,global){module.exports = function Operation() {
-}
-
-});
-
-require.define("/lib/text/operations/Delete.js",function(require,module,exports,__dirname,__filename,process,global){/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Returns a Changeset containing the operations needed to transform text1 into text2
  * 
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * @param text1 <String>
+ * @param text2 <String>
  */
-
-var Operation = require('../../Operation')
-
-/**
- * Delete Operation
- * Defined by:
- * @param pos <Number> The character index in the text at which the string should be inserted
- * @param text <String> The string to be inserted
- * @param accessory <Number> Something that breaks the tie (should be different for every editor/source); optional
- */
-function Delete(initialLength, pos, text, accessory) {
-  this.initialLength = initialLength
-  this.accessory = accessory || 0
-  this.pos = pos|0
-  this.len = text.length
-  this.text = text
-}
-
-Delete.prototype = new Operation
-Delete.prototype.constructor = Delete
-module.exports = Delete
-
-
-var Insert = require('./Insert')
-  , Equal = require('./Equal')
-  , Changeset = require('../Changeset')
-
-
-/**
- * Inclusion Transformation (IT) or Forward Transformation
- *
- * transforms the current operation against another operation in such
- * a way that the impact of the latter is effectively included
- */
-Delete.prototype.transformAgainst = function(change) {
-  // Delete
-  if (change instanceof Delete) {
-    var newInitialLength = this.initialLength-change.len
-
-    // 'abc' =>  0:-2('c') | 1:-1('ac')
-    // 'c'
-    if (this.pos < change.pos) {
-      // if the other operation already deleted some of the characters
-      // in my range, don't delete them again!
-      var startOfOther = Math.min(change.pos - this.pos, this.len)
-      return new Delete(newInitialLength, this.pos, this.text.substr(0, startOfOther) + this.text.substr(startOfOther + change.len), this.accessory)
-    }
-    
-    // 'abc'=>   1:-1('ac') | 1:-2('a')
-    // 'a'
-    if (this.pos == change.pos) {
-      // if the other operation already deleted some the characters
-      // in my range, don't delete them again!
-      if (this.len <= change.len) return new Equal
-      
-      // the other deletion's range is shorter than mine
-      return new Delete(newInitialLength, this.pos, this.text.substr(change.len), this.accessory)
-    }
-    
-    // 'abcd'=>   2:-1('abd') | 0:-3('d')
-    // 'd'
-    if (change.pos < this.pos) {
-      var overlap = change.pos+change.len - this.pos // overlap of `change`, starting at `this.pos`
-      if(overlap >= this.len) return new Equal
-      if(overlap > 0) return new Delete(newInitialLength, change.pos, this.text.substr(overlap), this.accessory)
-      return new Delete(newInitialLength, this.pos-change.len, this.text, this.accessory)
-    }
-  }
+Changeset.fromDiff = function(text1, text2) {
+  var diff = engine.diff_main(text1, text2, /* checkLines: */ false)
+  engine.diff_cleanupEfficiency(diff)
   
-  // Insert
-  if (change instanceof Insert) {
-    var newInitialLength = this.initialLength+change.len
-    // 'abc' =>  0:-1('bc') | 3:+x('abcx')
-    // 'bcx'
-    if (this.pos < change.pos) {
-      if(this.pos+this.len > change.pos) {
-        // An insert is done within our deletion range
-        // -> split it in to
-        var firstHalfLength = change.pos-this.pos
-        return new Changeset(
-          new Delete(newInitialLength, this.pos, this.text.substr(0, firstHalfLength), this.accessory)
-        , new Delete(newInitialLength, change.pos+change.len, this.text.substr(firstHalfLength), this.accessory))
-      }
-      return new Delete(newInitialLength, this.pos, this.text, this.accessory)
+  var cs = new Changeset // TODO: add in initial length prop
+  diff.forEach(function(d) {
+    if (dmp.DIFF_DELETE == d[0]) {
+      cs.push(new Skip(d[1].length))
+      cs.removendum += d[1]
     }
     
-    // 'abc'=>   1:-1('ac') | 1:+x('axbc')
-    // 'axc'
-    if (this.pos == change.pos) {
-      return new Delete(newInitialLength, this.pos+change.len, this.text, this.accessory)
+    if (dmp.DIFF_INSERT == d[0]) {
+      cs.push(new Insert(d[1].length))
+      cs.addendum += d[1]
     }
     
-    // 'abc'=>   2:-1('ab') | 0:+x('xabc')
-    // 'xab'
-    if (change.pos < this.pos) {
-      return new Delete(newInitialLength, this.pos+change.len, this.text, this.accessory)
+    if(dmp.DIFF_EQUAL == d[0]) {
+      cs.push(new Retain(d[1].length))
     }
-  }
+  })
   
-  // Equal
-  if(change instanceof Equal) return this
-  
-  throw new Error('Invalid value supplied to Insert#transformAgainst(); expected #<changesets.Operation>, but got #<'+change.__proto__.constructor.name+'>')
+  return cs
 }
-
-/**
- * Exclusion Transformation (ET) or Backwards Transformation
- * 
- * transforms the current operation against another operation in such a way
- * that the impact of the latter is effectively excluded
- */
-Delete.prototype.substract = function(change) {
-  // The current operation already assumes that
-  // the other `change` happened, so we create an operation
-  // that undoes the effect of `change` and transform the
-  // current operation on top of the inverse `change`
-  return this.transformAgainst(change.invert())
-}
-
-/**
- * Returns the inverse Operation of the current one
- * 
- * Operation.invert().apply(Operation.apply(text)) == text
- */
-Delete.prototype.invert = function() {
-  return new Insert(this.initialLength, this.pos, this.text, this.accessory)
-}
-
-/**
- * Applies this operation on the passed text
- *
- * @param text <String>
- */
-Delete.prototype.apply = function(text) {
-  if(text.length != this.initialLength) throw new Error('Text length doesn\'t match expected length. It\'s most likely you have missed a transformation: expected:'+this.initialLength+', actual:'+text.length)
-  if(text.substr(this.pos, this.len) != this.text) throw new Error('Applying delete operation: Passed context doesn\'t match assumed context: '+JSON.stringify(this)+', actual context: "'+text.substr(this.pos, this.len)+'"')
-  return text.slice(0, this.pos) + text.slice(this.pos+this.len)
-}
-
-});
-
-require.define("/lib/text/operations/Insert.js",function(require,module,exports,__dirname,__filename,process,global){/*!
- * changesets
- * A Changeset library incorporating operational transformation (OT)
- * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
- *
- * (MIT LICENSE)
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- * 
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- * 
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
-
-var Operation = require('../../Operation')
-
-/**
- * Insert Operation
- * Defined by:
- * @param pos <Number> The character index in the text at which the string should be inserted
- * @param text <String> The string to be inserted
- * @param accessory <Number> Something that breaks the tie (should be different for every editor/source); optional
- */
-function Insert(initialLength, pos, text, accessory) {
-  this.initialLength = initialLength
-  this.accessory = accessory || 0
-  this.pos = pos
-  this.len = text.length
-  this.text = text
-}
-
-Insert.prototype = new Operation
-Insert.prototype.constructor = Insert
-module.exports = Insert
-
-var Delete = require('./Delete')
-  , Equal = require('./Equal')
-
-/**
- * Inclusion Transformation (IT) or Forward Transformation
- *
- * transforms the current operation against another operation in such
- * a way that the impact of the latter is effectively included
- */
-Insert.prototype.transformAgainst = function(change) {
-  // Insert
-  if (change instanceof Insert) {
-    var newInitialLength = this.initialLength+change.len
-    // 'abc' =>  0:+x('xabc') | 3:+x('abcx')
-    // 'xabcx'
-    if (this.pos < change.pos) {
-      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
-    }
-    
-    // 'abc'=>   1:+x('axbc') | 1:+y('aybc')
-    // 'ayxbc'  -- depends on the accessory (the tie breaker)
-    if (this.pos == change.pos && this.accessory < change.accessory) {
-      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
-    }
-    
-    // 'abc'=>   1:+x('axbc') | 0:+x('xabc')
-    // 'xaxbc'
-    if (change.pos <= this.pos) {
-      return new Insert(newInitialLength, this.pos+change.len, this.text, this.accessory)
-    }
-  }
-
-  // Delete
-  if (change instanceof Delete) {
-    var newInitialLength = this.initialLength-change.len
-    
-    // 'abc'=>  1:+x('axbc') | 2:-1('ab')
-    // 'axb'
-    if (this.pos < change.pos) {
-      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
-    }
-    
-    // 'abc'=>  1:+x('axbc') | 1:-1('ac')
-    // 'axb'
-    if (this.pos == change.pos) {
-      return new Insert(newInitialLength, this.pos, this.text, this.accessory)
-    }
-    
-    //'abc'=> 2:+x('abxc') | 0:-2('c')
-    //'xc'
-    if (change.pos < this.pos) {
-      // Shift this back by `change.len`, but not more than `change.pos`
-      return new Insert(newInitialLength, Math.max(this.pos - change.len, change.pos), this.text, this.accessory)
-    }
-  }
-  
-  // Equal
-  if(change instanceof Equal) return this
-  
-  throw new Error('Invalid value supplied to Insert#transformAgainst(); expected #<changesets.Operation>, but got #<'+change.__proto__.constructor.name+'>')
-}
-
-/**
- * Exclusion Transformation (ET) or Backwards Transformation
- * 
- * transforms the current operation against another operation in such a way
- * that the impact of the latter is effectively excluded
- */
-Insert.prototype.substract = function(change) {
-  // The current operation already assumes that
-  // the other `change` happened, so we create an operation
-  // that undoes the effect of `change` and transform the
-  // current operation on top of the inverse `change`
-  return this.transformAgainst(change.invert())
-}
-
-/**
- * Returns the inverse Operation of the current one
- * 
- * Operation.invert().apply(Operation.apply(text)) == text
- */
-Insert.prototype.invert = function() {
-  return new Delete(this.initialLength, this.pos, this.text, this.accessory)
-}
-
-/**
- * Applies this operation on the passed text
- *
- * @param text <String>
- */
-Insert.prototype.apply = function(text) {
-  if(text.length != this.initialLength) throw new Error('Text length doesn\'t match expected length. It\'s most likely you have missed a transformation: expected:'+this.initialLength+', actual:'+text.length)
-  return text.slice(0, this.pos) + this.text + text.slice(this.pos)
-}
-
 });
 
 require.define("/node_modules/diff_match_patch/package.json",function(require,module,exports,__dirname,__filename,process,global){module.exports = {"main":"./lib/diff_match_patch"}
@@ -3261,10 +2991,313 @@ exports['DIFF_EQUAL'] = DIFF_EQUAL;
 
 });
 
-require.define("/lib/index.js",function(require,module,exports,__dirname,__filename,process,global){exports.text = require('./text/index')
+require.define("/lib/operations/Retain.js",function(require,module,exports,__dirname,__filename,process,global){/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operation = require('../Operation')
+
+/**
+ * Retain Operation
+ * Defined by:
+ * - length
+ * - symbol
+ *
+ * @param length <Number> How many chars to retain
+ */
+function Retain(length) {
+  this.length = length
+  this.symbol = '='
+}
+
+// True inheritance
+Retain.prototype = Object.create(Operation.prototype, {
+  constructor: {
+    value: Retain,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Retain
+
+Retain.prototype.applyDry = function(pointers) {
+  pointers.input += this.length
+  return this.length
+}
+
+Retain.prototype.invert = function() {
+  return this
+}
+
+Retain.prototype.apply = function(pointers, input) {
+  return input.substr(pointers.input, this.applyDry(pointers))
+}
+});
+
+require.define("/lib/Operation.js",function(require,module,exports,__dirname,__filename,process,global){function Operation() {
+}
+
+module.exports = Operation
+
+Operation.prototype.clone = function() {
+  return new (this.constructor)(this.length)
+}
+
+});
+
+require.define("/lib/operations/Skip.js",function(require,module,exports,__dirname,__filename,process,global){﻿/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operation = require('../Operation')
+
+/**
+ * Skip Operation
+ * Defined by:
+ * - length
+ * - symbol
+ *
+ * @param length <Number> How many chars to be Skip
+ */
+function Skip(length) {
+  this.length = length
+  this.symbol = '-'
+}
+
+// True inheritance
+Skip.prototype = Object.create(Operation.prototype, { 
+  constructor: {
+    value: Skip,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Skip
+
+
+var Insert = require('./Insert')
+  , Retain = require('./Retain')
+  , Changeset = require('../Changeset')
+
+/**
+ * Returns the inverse Operation of the current one
+ * 
+ * Operation.invert().apply(Operation.apply(text)) == text
+ */
+Skip.prototype.invert = function() {
+  return new Insert(this.length)
+}
+
+Skip.prototype.applyDry = function(pointers) {
+  pointers.removendum += this.length
+  pointers.input += this.length
+  return 0
+}
+
+/**
+ * Applies this operation on the passed text
+ *
+ * @param text <String>
+ */
+Skip.prototype.apply = function(pointers, input, addendum) {
+/*  // just a quick integrity check, if we remove the right stuff
+  var removedFragment = input.substr(pointers.input, op.length)
+    , removendumFragment = removendum.substr(pointers.removendum, op.length)
+  if(removedFragment !== removendumFragment) throw new Error('Skip Mismatch! The removed chars don\'t equal the expected chars.')
+*/
+  this.applyDry(pointers)
+  return ""
+}
+
+});
+
+require.define("/lib/operations/Insert.js",function(require,module,exports,__dirname,__filename,process,global){/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Operation = require('../Operation')
+
+/**
+ * Insert Operation
+ * Defined by:
+ * - length
+ * - symbol
+ *
+ * @param length <Number> How many chars to be inserted
+ */
+function Insert(length) {
+  this.length = length
+  this.symbol = '+'
+}
+
+// True inheritance
+Insert.prototype = Object.create(Operation.prototype, {
+  constructor: {
+    value: Insert,
+    enumerable: false,
+    writable: true,
+    configurable: true
+  }
+});
+module.exports = Insert
+
+var Skip = require('./Skip')
+  , Retain = require('./Retain')
+
+/**
+ * Returns the inverse Operation of the current one
+ * 
+ * Operation.invert().apply(Operation.apply(text)) == text
+ */
+Insert.prototype.invert = function() {
+  return new Skip(this.length)
+}
+
+Insert.prototype.applyDry = function(pointers) {
+  pointers.addendum += this.length
+  return this.length
+}
+
+/**
+ * Applies this operation on the passed text
+ *
+ * @param text <String>
+ */
+Insert.prototype.apply = function(pointers, input, addendum, removendum) {
+  return addendum.substr(pointers.addendum, this.applyDry(pointers))
+}
+
+});
+
+require.define("/lib/index.js",function(require,module,exports,__dirname,__filename,process,global){/*!
+ * changesets
+ * A Changeset library incorporating operational transformation (OT)
+ * Copyright 2012 by Marcel Klehr <mklehr@gmx.net>
+ *
+ * (MIT LICENSE)
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+var Changeset = require('./Changeset')
+  , Retain = require('./operations/Retain')
+  , Skip = require('./operations/Skip')
+  , Insert = require('./operations/Insert')
+  
 exports.Operation = require('./Operation')
+exports.Changeset = Changeset
+exports.Insert = Insert
+exports.Retain = Retain
+exports.Skip = Skip
 
 if('undefined' != typeof window) window.changesets = exports
+  
+/**
+ * Returns a Changeset containing the operations needed to transform text1 into text2
+ * 
+ * @param text1 <String>
+ * @param text2 <String>
+ */
+exports.constructChangeset = function(text1, text2) {
+  return Changeset.fromDiff(text1, text2)
+}
+
+/**
+ * Serializes the given changeset in order to return a (hopefully) more compact representation
+ * that can be sent through a network or stored in a database
+ * @alias cs.text.Changeset#pack
+ */
+exports.pack = function(cs) {
+  return cs.pack()
+}
+
+/**
+ * Unserializes the output of cs.text.pack
+ * @alias cs.text.Changeset.unpack
+ */
+exports.unpack = function(packed) {
+  return Changeset.unpack(packed)
+}
 });
 require("/lib/index.js");
 })();

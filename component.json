@@ -24,10 +24,9 @@
   "scripts": [
     "lib/index.js",
     "lib/Operation.js",
-    "lib/text/index.js",
-    "lib/text/Changeset.js",
-    "lib/text/operations/Delete.js",
-    "lib/text/operations/Insert.js",
-    "lib/text/operations/Equal.js"
+    "lib/Changeset.js",
+    "lib/operations/Delete.js",
+    "lib/operations/Insert.js",
+    "lib/operations/Equal.js"
   ]
 }

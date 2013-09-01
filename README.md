@@ -169,6 +169,9 @@ MIT
 
 # Changelog
 
+0.3.1
+ * fix Changeset#unpack() regex to allow for ops longer than 35 chars (thanks to @jonasp)
+
 0.3.0
  * complete revamp of the algorithms and data structures
  * support for merging changesets

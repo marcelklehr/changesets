@@ -795,7 +795,7 @@ Changeset.unpack = function(packed) {
     , addendum = components[1].replace(/%7c/gi, '|').replace(/%25/g, '%')
     , removendum = components[2].replace(/%7c/gi, '|').replace(/%25/g, '%')
 
-  var matches = packed.match(/(\+|-|=)\w+?/g)
+  var matches = packed.match(/(\+|-|=)\w+/g)
   if(!matches) throw new Error('Cannot unpack invalid serialized op string')
   
   var cs = new Changeset

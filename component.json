@@ -25,8 +25,8 @@
     "lib/index.js",
     "lib/Operation.js",
     "lib/Changeset.js",
-    "lib/operations/Delete.js",
+    "lib/operations/Skip.js",
     "lib/operations/Insert.js",
-    "lib/operations/Equal.js"
+    "lib/operations/Retain.js"
   ]
 }

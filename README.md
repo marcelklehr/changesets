@@ -46,6 +46,11 @@ var finalText = changes.apply(text1)
 finalText == text2 // true
 ```
 
+There are 3 types of operations:
+ * Retain (retains a number of chars),
+ * Skip (skips a number of chars, effectively deletes them),
+ * Insert (inserts a number of chars)
+
 ### Serializing changesets
 In many cases you will find the need to serialize your changesets in order to efficiently transfer them through the network or store them on disk.
 
@@ -152,22 +157,42 @@ for (var i=2; i < edits.length; i++) {
 
 This way we can effectively exclude any given changes from all following changesets.
 
-# Under the hood
+### Attributes
+As you know, there are 3 types of operations (`Retain`, `Skip` and `Insert`), but actually, there are four. The forth is an operation type called `Mark`.
+
+Mark can be used to apply attributes to a text. Currently attributes are like binary flags: Either a char has an attribute or it doesn't. Attributes are integer numbers (you'll need to implement some mapping between attributes and their ids). You can pass attributes to the `Mark` operation as follows:
+
+```js
+var mark = new Mark(/*length:*/5, {
+  0: 1
+, 7: 1
+, 3: 1
+, 15: 1
+, -2: 1
+, 11: 1
+})
+```
+
+Did you notice the negative number? Negative numbers enforce the removal of an attribute that has been applied on some range of the text, while positive numbers result in the application of some attribute.
+
+Now, how can you deal with those attributes? Currently, you'll have to store changes to attributes in separate changesets. Storing attributes for a document can be done in a changeset into which you merge attribute changes. Applying them is as easy as iterating over the operations of that chagneset (`changeset.forEach(fn..)`) and i.e. inserting HTML tags at respective positions in the corresponding document.
+
+## Under the hood
 *Changesets* makes use of Neil Fraser's [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts -- an amazing library!
 
 A Changeset, in the context of this lib, is defined as a stream of operations that all operate on some discrete range of the input text and can either . 
 
-# Todo
+## Todo
 * Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly (?)
 * add support for attributed text
 * every content type should have some pre-defined initial content (e.g. text would be '')
 * How to solve the false tie (FT) puzzle? it's not possible using user identifiers ([tp2](https://code.google.com/p/lightwave/source/browse/trunk/experimental/ot/README) solves it by retaining deleted chars)
 
 
-# License
+## License
 MIT
 
-# Changelog
+## Changelog
 
 0.3.1
  * fix Changeset#unpack() regex to allow for ops longer than 35 chars (thanks to @jonasp)

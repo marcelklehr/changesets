@@ -9,10 +9,6 @@ build text-based concurrent multi-user applications using operational transforma
 * reversibility/invertibility (undo any edit without corrupting the content or the state)
 * convergence (everybody sees the same state)
 
-(It is clear that this library alone cannot satisfy the above requirements, but rather provide you a means to do so in your application.)
-
-Note: While, at the current stage of development, this library only implements a plain text changeset solution, I may add support for rich text in the future. If you would like to help, feel free to contact me.
-
 ### Oppositional what?!
 In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
 
@@ -195,6 +191,7 @@ Did you notice the negative number? Negative numbers enforce the removal of an a
 
 Now, how can you deal with those attributes? Currently, you'll have to store changes to attributes in separate changesets. Storing attributes for a document can be done in a changeset into which you merge attribute changes. Applying them is as easy as iterating over the operations of that chagneset (`changeset.forEach(fn..)`) and i.e. inserting HTML tags at respective positions in the corresponding document.
 
+*Warning:* Attributes are still experimental. There are no tests, yet, and the API may change in the future.
 
 ## Todo
 

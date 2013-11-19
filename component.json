@@ -17,7 +17,7 @@
     "text"
   ],
   "dependencies": {
-    "marcelklehr/diff_match_patch": "*"
+
   },
   "license": "MIT",
   "main": "lib/index.js",

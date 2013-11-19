@@ -24,9 +24,9 @@
     "test": "vows ./test/*"
   },
   "dependencies": {
-    "diff_match_patch": "*"
   },
   "devDependencies": {
+    "diff_match_patch": "*"
     "vows": "*"
   },
   "author": "Marcel Klehr <mklehr@gmx.net>",

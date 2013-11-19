@@ -69,6 +69,7 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
+        try{
         var cs1 = engine.constructChangeset(test[0],test[1][0])
           , cs2 = engine.constructChangeset(test[0],test[1][1])
 
@@ -80,8 +81,13 @@ ITset.forEach(function(test, i) {
         console.log('=>', cs1.inspect())
 
         return cs1.apply(cs2.apply(test[0]))
+        }catch(e) {
+          console.log(e.stack ||e)
+          process.exit(1)
+        }
       },
       'should be correctly transformed using inclusion transformation': function(err, text) {
+        if(err) console.log(err.stack || err)
         assert.ifError(err)
         assert.equal(test[2], text)
       }
@@ -92,9 +98,10 @@ ITset.forEach(function(test, i) {
 // MERGING
 
 ITset.forEach(function(test, i) {
-  var batch = {}
+  var batch = {};
   batch[test[3]] = {
       topic: function() {
+        try{
         var cs1 = engine.constructChangeset(test[0],test[1][0])
           , cs2 = engine.constructChangeset(test[0],test[1][1])
           , merged
@@ -107,6 +114,10 @@ ITset.forEach(function(test, i) {
         console.log('=>', merged.inspect())
 
         return merged.apply(test[0])
+        }catch(e){
+          console.log(e.stack||e)
+          process.exit(1)
+        }
       },
       'should be correctly merged': function(err, text) {
         assert.ifError(err)
@@ -148,6 +159,7 @@ ITset.forEach(function(test, i) {
 
         console.log("\n\n "+test[0][0]+":", test[0][2], '-', test[0][1])
         console.dir(cs1.inspect())
+        console.dir(cs1.invert())
         console.dir(cs2.inspect())
 
         cs2 = cs2.substract(cs1, /*left:*/true)
@@ -163,10 +175,12 @@ ITset.forEach(function(test, i) {
   suite.addBatch(batch)
 })
 
+var packUnpack1 = "012345678901234567890123456789"
+  , packUnpack2 = "012345678aaaaaaaaaaaaaaaaaaaaaa8aaaaaaaaaaaaaaaaaaaa9"
 suite.addBatch({
 'pack/unpack':
   { topic: function() {
-      return engine.constructChangeset("1234blabliblu", "1ab2c3blablakablibradalu")
+      return engine.constructChangeset(packUnpack1, packUnpack2)
     }
   , 'should be packed and unpacked correctly': function(er, cs) {
       var packed = cs.pack()
@@ -174,7 +188,7 @@ suite.addBatch({
       console.log(cs.inspect())
       console.log(packed)
       var unpacked = engine.Changeset.unpack(packed)
-      assert.deepEqual(unpacked, cs)
+      assert.equal(unpacked.apply(packUnpack1), packUnpack2)
     }
   }
 })

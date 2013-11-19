@@ -26,7 +26,7 @@
   "dependencies": {
   },
   "devDependencies": {
-    "diff_match_patch": "*"
+    "diff_match_patch": "*",
     "vows": "*"
   },
   "author": "Marcel Klehr <mklehr@gmx.net>",

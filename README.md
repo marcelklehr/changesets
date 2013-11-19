@@ -35,15 +35,38 @@ If you're not using component in the browser, you need to load the package as a 
 ... and use the global `changesets` variable ;)
 
 ### Constructing and applying changesets
-Construct a changeset between two texts:
-```js
-var changes = Changeset.fromDiff(text1, text2)
-```
-You get a `Changeset` object containing multiple `Operation`s. The changeset can be applied to a text as follows:
-```js
-var finalText = changes.apply(text1)
+A changeset is an ordered list of operations. There are 3 types of operations:
+ * Retain (retains a number of chars),
+ * Skip (skips a number of chars, effectively deletes them),
+ * Insert (inserts a number of chars)
 
-finalText == text2 // true
+Suppose we have two texts
+```js
+var text1 = 'bla bla gibberish'
+  , text2 = 'blaa blah blah'
+```
+ 
+To construct a changeset by hand, just do
+```js
+var changeset = new Changeset([op1, op2, ...])
+changeset.addendum = // ...
+changeset.removendum = // ...    // I'll add a nice API for this soon ;)
+```
+
+Changesets easily integrates with Neil Fraser's [diff_match_patch](https://github.com/marcelklehr/diff_match_patch), so to construct a changeset between two texts:
+```js
+var dmp = require('diff_match_patch')
+  , engine = new dmp.diff_match_patch
+
+var diff = engine.diff_main(text1, text2)
+var changeset = Changeset.fromDiff(diff)
+```
+
+Changesets can be applied to a text as follows:
+```js
+var applied = changeset.apply(text1)
+
+applied == text2 // true
 ```
 
 ### Serializing changesets
@@ -82,8 +105,8 @@ var text = "Hello adventurer!"
 Now, what do you do? As a human you're certainly able to make out the changes and tell what's been changed to combine both revisions, but a machine is hard put to do so without proper guidance. And this is where this library comes in. Firstly, you'll need to extract the changes in each version.
 
 ```js
-var csA = Changeset.fromDiff(text, textA)
-var csB = Changeset.fromDiff(text, textB)
+var csA = ChangesetFromDiff(text, textA)
+var csB = ChangesetFromDiff(text, textB)
 ```
 
 Now we can send the changes through the network in an eficient way and if we apply them on the original text on the other end we get the full contents of revision A again.
@@ -130,7 +153,7 @@ var versions =
 
 var edits = []
 for (var i=1; i < versions.length; i++) {
-  edits.push( Changeset.fromDiff(text[i-1], text[i]) )
+  edits.push( ChangesetfromDiff(text[i-1], text[i]) )
 }
 ```
 
@@ -152,22 +175,36 @@ for (var i=2; i < edits.length; i++) {
 
 This way we can effectively exclude any given changes from all following changesets.
 
-# Under the hood
-*Changesets* makes use of Neil Fraser's [*diff-match-patch* library](https://code.google.com/p/google-diff-match-patch/) for generating the diff between two texts -- an amazing library!
+### Attributes
+As you know, there are 3 types of operations (`Retain`, `Skip` and `Insert`), but actually, there are four. The forth is an operation type called `Mark`.
 
-A Changeset, in the context of this lib, is defined as a stream of operations that all operate on some discrete range of the input text and can either . 
+Mark can be used to apply attributes to a text. Currently attributes are like binary flags: Either a char has an attribute or it doesn't. Attributes are integer numbers (you'll need to implement some mapping between attributes and their ids). You can pass attributes to the `Mark` operation as follows:
 
-# Todo
-* Use best effort (aka Fuzzy Patch -- see http://neil.fraser.name/writing/patch/) when applying a changeset, but allow people to check whether the changeset fits neatly, so they can still refuse changesets that don't fit neatly (?)
-* add support for attributed text
-* every content type should have some pre-defined initial content (e.g. text would be '')
-* How to solve the false tie (FT) puzzle? it's not possible using user identifiers ([tp2](https://code.google.com/p/lightwave/source/browse/trunk/experimental/ot/README) solves it by retaining deleted chars)
+```js
+var mark = new Mark(/*length:*/5, {
+  0: 1
+, 7: 1
+, 3: 1
+, 15: 1
+, -2: 1
+, 11: 1
+})
+```
+
+Did you notice the negative number? Negative numbers enforce the removal of an attribute that has been applied on some range of the text, while positive numbers result in the application of some attribute.
+
+Now, how can you deal with those attributes? Currently, you'll have to store changes to attributes in separate changesets. Storing attributes for a document can be done in a changeset into which you merge attribute changes. Applying them is as easy as iterating over the operations of that chagneset (`changeset.forEach(fn..)`) and i.e. inserting HTML tags at respective positions in the corresponding document.
 
 
-# License
+## Todo
+
+* Maybe support TP2? ([lightwave](https://code.google.com/p/lightwave/source/browse/trunk/experimental/ot/README) solves the FT puzzle by retaining deleted chars)
+* vows is super ugly. Switch to mocha!
+
+## License
 MIT
 
-# Changelog
+## Changelog
 
 0.3.1
  * fix Changeset#unpack() regex to allow for ops longer than 35 chars (thanks to @jonasp)

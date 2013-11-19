@@ -27,8 +27,17 @@ var vows = require('vows')
   , assert = require('assert')
 
 var changesets = require('../lib')
-  , engine = changesets
+  , Changeset = changesets.Changeset
 
+var dmp = require('diff_match_patch')
+  , engine = new dmp.diff_match_patch
+
+
+function constructChangeset(text1, text2) {
+  var diff = engine.diff_main(text1, text2)
+  engine.diff_cleanupEfficiency(diff)
+  return Changeset.fromDiff(diff)
+}
 
 var suite = vows.describe('changesets: operational transformation of text')
 
@@ -69,8 +78,9 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0],test[1][0])
-          , cs2 = engine.constructChangeset(test[0],test[1][1])
+        try{
+        var cs1 = constructChangeset(test[0],test[1][0])
+          , cs2 = constructChangeset(test[0],test[1][1])
 
         console.log("\n\n", test[0])        
         console.dir(cs1.inspect())
@@ -80,8 +90,13 @@ ITset.forEach(function(test, i) {
         console.log('=>', cs1.inspect())
 
         return cs1.apply(cs2.apply(test[0]))
+        }catch(e) {
+          console.log(e.stack ||e)
+          process.exit(1)
+        }
       },
       'should be correctly transformed using inclusion transformation': function(err, text) {
+        if(err) console.log(err.stack || err)
         assert.ifError(err)
         assert.equal(test[2], text)
       }
@@ -92,11 +107,12 @@ ITset.forEach(function(test, i) {
 // MERGING
 
 ITset.forEach(function(test, i) {
-  var batch = {}
+  var batch = {};
   batch[test[3]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0],test[1][0])
-          , cs2 = engine.constructChangeset(test[0],test[1][1])
+        try{
+        var cs1 = constructChangeset(test[0],test[1][0])
+          , cs2 = constructChangeset(test[0],test[1][1])
           , merged
 
         console.log("\n\n", test[0]+': merging')        
@@ -107,6 +123,10 @@ ITset.forEach(function(test, i) {
         console.log('=>', merged.inspect())
 
         return merged.apply(test[0])
+        }catch(e){
+          console.log(e.stack||e)
+          process.exit(1)
+        }
       },
       'should be correctly merged': function(err, text) {
         assert.ifError(err)
@@ -143,11 +163,12 @@ ITset.forEach(function(test, i) {
   var batch = {}
   batch[test[2]] = {
       topic: function() {
-        var cs1 = engine.constructChangeset(test[0][0],test[0][1])
-          , cs2 = engine.constructChangeset(test[0][1],test[0][2])
+        var cs1 = constructChangeset(test[0][0],test[0][1])
+          , cs2 = constructChangeset(test[0][1],test[0][2])
 
         console.log("\n\n "+test[0][0]+":", test[0][2], '-', test[0][1])
         console.dir(cs1.inspect())
+        console.dir(cs1.invert())
         console.dir(cs2.inspect())
 
         cs2 = cs2.substract(cs1, /*left:*/true)
@@ -163,18 +184,20 @@ ITset.forEach(function(test, i) {
   suite.addBatch(batch)
 })
 
+var packUnpack1 = "012345678901234567890123456789"
+  , packUnpack2 = "012345678aaaaaaaaaaaaaaaaaaaaaa8aaaaaaaaaaaaaaaaaaaa9"
 suite.addBatch({
 'pack/unpack':
   { topic: function() {
-      return engine.constructChangeset("1234blabliblu", "1ab2c3blablakablibradalu")
+      return constructChangeset(packUnpack1, packUnpack2)
     }
   , 'should be packed and unpacked correctly': function(er, cs) {
       var packed = cs.pack()
       console.log()
       console.log(cs.inspect())
       console.log(packed)
-      var unpacked = engine.Changeset.unpack(packed)
-      assert.deepEqual(unpacked, cs)
+      var unpacked = Changeset.unpack(packed)
+      assert.equal(unpacked.apply(packUnpack1), packUnpack2)
     }
   }
 })
@@ -198,7 +221,7 @@ suite.addBatch({
       topic: function() {
         console.log("\n\n "+test[0]+": inverting ", test[1])
       
-        var cs1 = engine.constructChangeset(test[0], test[1])
+        var cs1 = constructChangeset(test[0], test[1])
           , cs2 = cs1.invert()
 
         console.dir(cs1.inspect())
@@ -218,7 +241,7 @@ suite.addBatch({
 suite.addBatch({
 'accessories':
   { topic: function() {
-      return [engine.constructChangeset("1234", "1234b"), engine.constructChangeset("1234", "1234a")]
+      return [constructChangeset("1234", "1234b"), constructChangeset("1234", "1234a")]
     }
   , 'should cause the same outcome ragardless of the transformation order': function(er, cs) {
       var text1 = cs[0].transformAgainst(cs[1], /*left:*/true).apply( cs[1].apply("1234") )
@@ -232,7 +255,7 @@ suite.addBatch({
 suite.addBatch({
 'validation':
   { topic: function() {
-      var cs = engine.constructChangeset("1234", "12a34b")
+      var cs = constructChangeset("1234", "12a34b")
       cs.apply(cs.apply("1234"))
       
       returnthis.callback()

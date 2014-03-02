@@ -9,6 +9,8 @@ build text-based concurrent multi-user applications using operational transforma
 * reversibility/invertibility (undo any edit without corrupting the content or the state)
 * convergence (everybody sees the same state)
 
+News: *changesets* now supports shareJS' ot type API spec.
+
 ### Oppositional what?!
 In case the above question just came to your mind, you better start with [Wikipedia's entry on Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation) and a comprehensive [FAQ concerning OT](http://www3.ntu.edu.sg/home/czsun/projects/otfaq); I particularly recommend reading the latter.
 

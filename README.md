@@ -40,15 +40,13 @@ A changeset is an ordered list of operations. There are 3 types of operations:
 
 Suppose we have two texts
 ```js
-var text1 = 'bla bla gibberish'
-  , text2 = 'blaa blah blah'
+var text1 = 'Rockets fly higher than rocks'
+  , text2 = 'Rockets can fly higher than rocks, usually'
 ```
  
 To construct a changeset by hand, just do
 ```js
-var changeset = new Changeset([op1, op2, ...])
-changeset.addendum = // ...
-changeset.removendum = // ...    // I'll add a nice API for this soon ;)
+Changeset.create().retain(8).insert('can ').retain(21).insert(', usually').end()
 ```
 
 Changesets easily integrates with Neil Fraser's [diff_match_patch](https://github.com/marcelklehr/diff_match_patch), so to construct a changeset between two texts:

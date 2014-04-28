@@ -1,7 +1,7 @@
 {
   "name": "changesets",
-  "version": "0.3.1",
-  "description": "A Changeset library incorporating an operational transformation (OT) algorithm -- for node and the browser!",
+  "version": "0.4.0",
+  "description": "Changeset library incorporating an operational transformation (OT) algorithm - for node and the browser, with shareJS support",
   "repository": {
     "type": "git",
     "url": "https://github.com/marcelklehr/changesets.git"

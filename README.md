@@ -7,7 +7,7 @@ Easily create and apply changesets at all sites of a distributed system, leverag
 * intention preservation (put the 's' into 'sock' and it'll stay a sock)
 * reversibility (undo any edit without problems)
 
-News: *changesets* now supports the ottypes API spec of shareJS.
+News: *changesets* now supports the ottypes API spec of shareJS. If you'd like a more unixy, transport agnostic tool, though, check out [gulf](https://github.com/marcelklehr/gulf).
 
 ## Install
 `npm install changesets` or `component install marcelklehr/changesets`

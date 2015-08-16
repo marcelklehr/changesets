@@ -10,10 +10,10 @@
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -44,7 +44,7 @@ var suite = vows.describe('changesets: operational transformation of text')
 // IT
 
 ;// Insert onto Insert
-var ITset = 
+var ITset =
 [ ["123", ["a123", "123b"], "a123b", "Insert onto Insert; o1.pos < o2.pos"]
 , ["123", ["1a23", "1b23"], "1ab23", "Insert onto Insert; o1.pos = o2.pos"]
 , ["123", ["12a3", "b123"], "b12a3", "Insert onto Insert; o2.pos < o1.pos"]
@@ -82,7 +82,7 @@ ITset.forEach(function(test, i) {
         var cs1 = constructChangeset(test[0],test[1][0])
           , cs2 = constructChangeset(test[0],test[1][1])
 
-        console.log("\n\n", test[0])        
+        console.log("\n\n", test[0])
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
@@ -115,7 +115,7 @@ ITset.forEach(function(test, i) {
           , cs2 = constructChangeset(test[0],test[1][1])
           , merged
 
-        console.log("\n\n", test[0]+': merging')        
+        console.log("\n\n", test[0]+': merging')
         console.dir(cs1.inspect())
         console.dir(cs2.inspect())
 
@@ -220,7 +220,7 @@ suite.addBatch({
   batch[test[2]] = {
       topic: function() {
         console.log("\n\n "+test[0]+": inverting ", test[1])
-      
+
         var cs1 = constructChangeset(test[0], test[1])
           , cs2 = cs1.invert()
 
@@ -257,7 +257,7 @@ suite.addBatch({
   { topic: function() {
       var cs = constructChangeset("1234", "12a34b")
       cs.apply(cs.apply("1234"))
-      
+
       returnthis.callback()
     }
   , 'should error if you apply the same cs twice, without transforming it': function(er) {

@@ -44,7 +44,6 @@ var suite = vows.describe('changesets: operational transformation of text')
 // IT
 
 ;// Insert onto Insert
-var ITset =
 [ ["123", ["a123", "123b"], "a123b", "Insert onto Insert; o1.pos < o2.pos"]
 , ["123", ["1a23", "1b23"], "1ab23", "Insert onto Insert; o1.pos = o2.pos"]
 , ["123", ["12a3", "b123"], "b12a3", "Insert onto Insert; o2.pos < o1.pos"]
@@ -74,7 +73,7 @@ var ITset =
 // Insert onto nothing
 , ["123", ["1a2b3c", "123"], "1a2b3c", "Insert onto Nothing"]
 ]
-ITset.forEach(function(test, i) {
+.forEach(function(test, i) {
   var batch = {}
   batch[test[3]] = {
       topic: function() {
@@ -104,41 +103,11 @@ ITset.forEach(function(test, i) {
   suite.addBatch(batch)
 })
 
-// MERGING
-
-ITset.forEach(function(test, i) {
-  var batch = {};
-  batch[test[3]] = {
-      topic: function() {
-        try{
-        var cs1 = constructChangeset(test[0],test[1][0])
-          , cs2 = constructChangeset(test[0],test[1][1])
-          , merged
-
-        console.log("\n\n", test[0]+': merging')
-        console.dir(cs1.inspect())
-        console.dir(cs2.inspect())
-
-        merged = cs1.merge(cs2, /*left:*/true)
-        console.log('=>', merged.inspect())
-
-        return merged.apply(test[0])
-        }catch(e){
-          console.log(e.stack||e)
-          process.exit(1)
-        }
-      },
-      'should be correctly merged': function(err, text) {
-        assert.ifError(err)
-        assert.equal(test[2], text)
-      }
-    }
-  suite.addBatch(batch)
-})
-
 // ET
 
-;// Insert minus Insert
+;
+ETset =
+// Insert minus Insert
 [ [["123", "123b", "a123b"], "a123", "Insert minus Insert; o2.pos < o1.pos"]
 , [["123", "b123", "b12a3"], "12a3", "Insert minus Insert; o1.pos < o2.pos"]
 , [["123", "bb123", "bab123"], "a123", "Insert minus Insert; o1.pos < o2.pos < o1.pos+len"]
@@ -159,7 +128,7 @@ ITset.forEach(function(test, i) {
 , [["1234", "2bc3", "2abc3"], "12a34", "Mixed ET 1"]
 , [["1234", "d2bc", "da2abc"], "1234aa", "Mixed ET 2"]// yea. this is because of using cleanup_efficiency
 ]
-.forEach(function(test, i) {
+ETset.forEach(function(test, i) {
   var batch = {}
   batch[test[2]] = {
       topic: function() {
@@ -183,6 +152,39 @@ ITset.forEach(function(test, i) {
     }
   suite.addBatch(batch)
 })
+
+// MERGING
+
+ETset.forEach(function(test, i) {
+  var batch = {};
+  batch[test[2]] = {
+      topic: function() {
+        try{
+        var cs1 = constructChangeset(test[0][0],test[0][1])
+          , cs2 = constructChangeset(test[0][1],test[0][2])
+          , merged
+
+        console.log("\n\n", test[0]+': merging')
+        console.dir(cs1.inspect())
+        console.dir(cs2.inspect())
+
+        merged = cs1.merge(cs2, /*left:*/true)
+        console.log('=>', merged.inspect())
+
+        return merged.apply(test[0][0])
+        }catch(e){
+          console.log(e.stack||e)
+          process.exit(1)
+        }
+      },
+      'should be correctly merged': function(err, text) {
+        assert.ifError(err)
+        assert.equal(test[0][2], text)
+      }
+    }
+  suite.addBatch(batch)
+})
+
 
 var packUnpack1 = "012345678901234567890123456789"
   , packUnpack2 = "012345678aaaaaaaaaaaaaaaaaaaaaa8aaaaaaaaaaaaaaaaaaaa9"

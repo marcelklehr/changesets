@@ -38,6 +38,7 @@ Builder.prototype.end = function() {
   cs.removendum = this.removendum
   return cs
 }
+
 },{"./Changeset":2,"./operations/Insert":7,"./operations/Retain":8,"./operations/Skip":9}],2:[function(require,module,exports){
 /*!
  * changesets
@@ -51,10 +52,10 @@ Builder.prototype.end = function() {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -74,7 +75,7 @@ function Changeset(ops/*or ops..*/) {
   this.removendum = ""
   this.inputLength = 0
   this.outputLength = 0
-  
+
   if(!Array.isArray(ops)) ops = arguments
   for(var i=0; i<ops.length; i++) {
     this.push(ops[i])
@@ -102,7 +103,7 @@ var Retain = require('./operations/Retain')
   , Insert = require('./operations/Insert')
 
 var Builder = require('./Builder')
-  
+
 /**
  * Returns an array containing the ops that are within the passed range
  * (only op.input is counted; thus not counting inserts to the range length, yet they are part of the range)
@@ -142,7 +143,11 @@ Changeset.prototype.merge = function(otherCs, left) {
   if(!(otherCs instanceof Changeset)) {
     throw new Error('Argument must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
   }
-  
+
+  if(otherCs.inputLength !== this.outputLength) {
+    throw new Error("Changeset lengths for merging don't match! Input length of younger cs: "+otherCs.inputLength+', output length of older cs:'+this.outputLength)
+  }
+
   var newops = []
     , addPtr1 = 0
     , remPtr1 = 0
@@ -150,63 +155,69 @@ Changeset.prototype.merge = function(otherCs, left) {
     , remPtr2 = 0
     , newaddendum = ''
     , newremovendum = ''
-  
+
   zip(this, otherCs, function(op1, op2) {
     // console.log(newops)
     // console.log(op1, op2)
 
-    if(op1 && !op1.input && (!op2 || op2.input || left)) { // if it's a tie -- "left" breaks it.
+    // I'm deleting something -- the other cs can't know that, so just overtake my op
+    if(op1 && !op1.output) {
       newops.push(op1.merge().clone())
-      newaddendum += this.addendum.substr(addPtr1, op1.length) // overtake added chars
-      addPtr1 += op1.length
+      newremovendum += this.removendum.substr(remPtr1, op1.length) // overtake added chars
+      remPtr1 += op1.length
       op1.length = 0 // don't gimme that one again.
       return
     }
-    
-    if(op2 && !op2.input && (!op1 || op1.input || !left)) {// if it's a tie -- "left" breaks it.
+
+    // op2 is an insert
+    if(op2 && !op2.input) {
       newops.push(op2.merge().clone())
       newaddendum += otherCs.addendum.substr(addPtr2, op2.length) // overtake added chars
       addPtr2 += op2.length
       op2.length = 0 // don't gimme that one again.
       return
     }
-    
-    // XXX Move addendum and removendum stuff to indiv. ops
-    // XXX Move everything below this to op1.merge(op2)
-    
-    if(op2 && !op2.output) {
-      newops.push(op2.merge(op1).clone())
-      newremovendum += otherCs.removendum.substr(remPtr2, op2.length) // overtake removed chars
-      remPtr2 += op2.length
-      if(op1) op1.length = 0 // don't gimme these again.
-      op2.length = 0
+
+    // op2 is either a retain or a skip
+    if(op2 && op2.input && op1) {
+      // op2 retains whatever we do here (retain or insert), so just clone my op
+      if(op2.output) {
+        newops.push(op1.merge(op2).clone())
+        if(!op1.input) { // overtake addendum
+          newaddendum += this.addendum.substr(addPtr1, op1.length)
+          addPtr1 += op1.length
+        }
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }else
+
+      // op2 deletes my retain here, so just clone the delete
+      // (op1 can only be a retain and no skip here, cause we've handled skips above already)
+      if(!op2.output && op1.input) {
+        newops.push(op2.merge(op1).clone())
+        newremovendum += otherCs.removendum.substr(remPtr2, op2.length) // overtake added chars
+        remPtr2 += op2.length
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }else
+
+      //otherCs deletes something I added (-1) +1 = 0
+      {
+        addPtr1 += op1.length
+        op1.length = 0 // don't gimme these again
+        op2.length = 0
+      }
       return
     }
-    
-    if(op1 && !op1.output) {
-      newops.push(op1.merge(op2).clone())
-      newremovendum += this.removendum.substr(remPtr1, op1.length) // overtake removed chars
-      remPtr1 += op1.length
-      op1.length = 0 // don't gimme that one again.
-      if(op2) op2.length = 0
-      return
-    }
-    
-    if((op1 && op1.input == op1.output)) {
-      newops.push(op1.merge(op2).clone())
-      op1.length = 0 // don't gimme these again.
-      if(op2) op2.length = 0
-      return
-    }
-    
+
     console.log('oops', arguments)
     throw new Error('oops. This case hasn\'t been considered by the developer (error code: PBCAC)')
   }.bind(this))
-  
+
   var newCs = new Changeset(newops)
   newCs.addendum = newaddendum
   newCs.removendum = newremovendum
-  
+
   return newCs
 }
 
@@ -217,18 +228,18 @@ Changeset.prototype.merge = function(otherCs, left) {
 function zip(cs1, cs2, func) {
   var opstack1 = cs1.map(function(op) {return op.clone()}) // copy ops
     , opstack2 = cs2.map(function(op) {return op.clone()})
-  
+
   var op2, op1
   while(opstack1.length || opstack2.length) {// iterate through all outstanding ops of this cs
     op1 = opstack1[0]? opstack1[0].clone() : null
     op2 = opstack2[0]? opstack2[0].clone() : null
-    
+
     if(op1) {
       if(op2) op1 = op1.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
       if(opstack1[0].length > op1.length) opstack1[0] = opstack1[0].derive(opstack1[0].length-op1.length)
       else opstack1.shift()
     }
-    
+
     if(op2) {
       if(op1) op2 = op2.derive(Math.min(op1.length, op2.length)) // slice 'em into equally long pieces
       if(opstack2[0].length > op2.length) opstack2[0] = opstack2[0].derive(opstack2[0].length-op2.length)
@@ -236,7 +247,7 @@ function zip(cs1, cs2, func) {
     }
 
     func(op1, op2)
-    
+
     if(op1 && op1.length) opstack1.unshift(op1)
     if(op2 && op2.length) opstack2.unshift(op2)
   }
@@ -249,21 +260,21 @@ function zip(cs1, cs2, func) {
  * all operations in another changeset in such a way that the
  * effects of the latter are effectively included.
  * This is basically like a applying the other cs on this one.
- * 
+ *
  * @param otherCs <Changeset>
  * @param left <boolean> Which op to choose if there's an insert tie (If you use this function in a distributed, synchronous environment, be sure to invert this param on the other site, otherwise it can be omitted safely)
- * 
+ *
  * @returns <Changeset>
  */
 Changeset.prototype.transformAgainst = function(otherCs, left) {
   if(!(otherCs instanceof Changeset)) {
     throw new Error('Argument to Changeset#transformAgainst must be a #<Changeset>, but received '+otherCs.__proto__.constructor.name)
   }
-  
+
   if(this.inputLength != otherCs.inputLength) {
     throw new Error('Can\'t transform changesets with differing inputLength: '+this.inputLength+' and '+otherCs.inputLength)
   }
-  
+
   var transformation = new ChangesetTransform(this, [new Retain(Infinity)])
   otherCs.forEach(function(op) {
     var nextOp = this.subrange(transformation.pos, Infinity)[0] // next op of this cs
@@ -272,13 +283,13 @@ Changeset.prototype.transformAgainst = function(otherCs, left) {
     }
     op.apply(transformation)
   }.bind(this))
-  
+
   return transformation.result()
 }
 
 /**
  * Exclusion Transformation (ET) or Backwards Transformation
- * 
+ *
  * transforms all operations in the current changeset against the operations
  * in another changeset in such a way that the impact of the latter are effectively excluded
  *
@@ -296,7 +307,7 @@ Changeset.prototype.substract = function(changeset, left) {
 
 /**
  * Returns the inverse Changeset of the current one
- * 
+ *
  * Changeset.invert().apply(Changeset.apply(document)) == document
  */
 Changeset.prototype.invert = function() {
@@ -304,7 +315,7 @@ Changeset.prototype.invert = function() {
   var newCs = new Changeset(this.map(function(op) {
     return op.invert()
   }))
-  
+
   // removendum becomes addendum and vice versa
   newCs.addendum = this.removendum
   newCs.removendum = this.addendum
@@ -318,7 +329,7 @@ Changeset.prototype.invert = function() {
 Changeset.prototype.apply = function(input) {
   // pre-requisites
   if(input.length != this.inputLength) throw new Error('Input length doesn\'t match expected length. expected: '+this.inputLength+'; actual: '+input.length)
-  
+
   var operation = new TextTransform(input, this.addendum, this.removendum)
 
   this.forEach(function(op) {
@@ -342,7 +353,7 @@ Changeset.prototype.inspect = function() {
       j += op.length
       return string
     }
-    
+
     for(var i=0; i<op.length; i++) string += op.symbol
     return string
   }.bind(this)).join('')
@@ -361,7 +372,7 @@ Changeset.prototype.pack = function() {
   var packed = this.map(function(op) {
     return op.pack()
   }).join('')
-  
+
   var addendum = this.addendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
     , removendum = this.removendum.replace(/%/g, '%25').replace(/\|/g, '%7C')
   return packed+'|'+addendum+'|'+removendum
@@ -372,7 +383,7 @@ Changeset.prototype.toString = function() {
 
 /**
  * Unserializes the output of cs.text.Changeset#toString()
- * 
+ *
  * @param packed <String> The serialized changeset
  * @param <cs.Changeset>
  */
@@ -385,7 +396,7 @@ Changeset.unpack = function(packed) {
 
   var matches = opstring.match(/[=+-]([^=+-])+/g)
   if(!matches) throw new Error('Cannot unpack invalidly serialized op string')
-  
+
   var ops = []
   matches.forEach(function(s) {
     var symbol = s.substr(0,1)
@@ -395,11 +406,11 @@ Changeset.unpack = function(packed) {
     if(Retain.prototype.symbol == symbol) return ops.push(Retain.unpack(data))
     throw new Error('Invalid changeset representation passed to Changeset.unpack')
   })
-  
+
   var cs = new Changeset(ops)
   cs.addendum = addendum
   cs.removendum = removendum
-  
+
   return cs
 }
 
@@ -409,7 +420,7 @@ Changeset.create = function() {
 
 /**
  * Returns a Changeset containing the operations needed to transform text1 into text2
- * 
+ *
  * @param text1 <String>
  * @param text2 <String>
  */
@@ -422,7 +433,7 @@ Changeset.fromDiff = function(diff) {
   var DIFF_DELETE = -1;
   var DIFF_INSERT = 1;
   var DIFF_EQUAL = 0;
-  
+
   var ops = []
     , removendum = ''
     , addendum = ''
@@ -432,22 +443,23 @@ Changeset.fromDiff = function(diff) {
       ops.push(new Skip(d[1].length))
       removendum += d[1]
     }
-    
+
     if (DIFF_INSERT == d[0]) {
       ops.push(new Insert(d[1].length))
       addendum += d[1]
     }
-    
+
     if(DIFF_EQUAL == d[0]) {
       ops.push(new Retain(d[1].length))
     }
   })
-  
+
   var cs = new Changeset(ops)
   cs.addendum = addendum
   cs.removendum = removendum
   return cs
 }
+
 },{"./Builder":1,"./ChangesetTransform":3,"./TextTransform":5,"./operations/Insert":7,"./operations/Retain":8,"./operations/Skip":9}],3:[function(require,module,exports){
 /*!
  * changesets
@@ -461,10 +473,10 @@ Changeset.fromDiff = function(diff) {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -536,6 +548,7 @@ ChangesetTransform.prototype.result = function() {
   newCs.removendum = this.newRemovendum
   return newCs
 }
+
 },{"./Changeset":2,"./operations/Insert":7,"./operations/Retain":8,"./operations/Skip":9}],4:[function(require,module,exports){
 function Operator() {
 }
@@ -553,6 +566,7 @@ Operator.prototype.derive = function(len) {
 Operator.prototype.pack = function() {
   return this.symbol + (this.length).toString(36)
 }
+
 },{}],5:[function(require,module,exports){
 /*!
  * changesets
@@ -566,10 +580,10 @@ Operator.prototype.pack = function() {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -627,6 +641,7 @@ TextTransform.prototype.result = function() {
   this.writeOutput(this.readInput(Infinity))
   return this.output
 }
+
 },{"./Changeset":2,"./operations/Insert":7,"./operations/Retain":8,"./operations/Skip":9}],6:[function(require,module,exports){
 /*!
  * changesets
@@ -640,10 +655,10 @@ TextTransform.prototype.result = function() {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -657,7 +672,7 @@ var Changeset = require('./Changeset')
   , Retain = require('./operations/Retain')
   , Skip = require('./operations/Skip')
   , Insert = require('./operations/Insert')
-  
+
 exports.Operator = require('./Operator')
 exports.Changeset = Changeset
 exports.Insert = Insert
@@ -695,14 +710,14 @@ exports.url = 'https://github.com/marcelklehr/changesets'
 
 /**
  * create([initialText])
- * 
+ *
  * creates a snapshot (optionally with supplied intial text)
  */
 exports.create = function(initText) {
   return initText || ''
 }
 
-/** 
+/**
  * Apply a changeset on a snapshot creating a new one
  *
  * The old snapshot object mustn't be used after calling apply on it
@@ -737,6 +752,7 @@ exports.compose = function (op1, op2) {
 exports.invert = function(op) {
   return op.invert()
 }
+
 },{"./Changeset":2,"./Operator":4,"./operations/Insert":7,"./operations/Retain":8,"./operations/Skip":9}],7:[function(require,module,exports){
 /*!
  * changesets
@@ -750,10 +766,10 @@ exports.invert = function(op) {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -810,6 +826,7 @@ Insert.prototype.invert = function() {
 Insert.unpack = function(data) {
   return new Insert(parseInt(data, 36))
 }
+
 },{"../Operator":4,"./Retain":8,"./Skip":9}],8:[function(require,module,exports){
 /*!
  * changesets
@@ -823,10 +840,10 @@ Insert.unpack = function(data) {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -879,6 +896,7 @@ Retain.prototype.merge = function(op2) {
 Retain.unpack = function(data) {
   return new Retain(parseInt(data, 36))
 }
+
 },{"../Operator":4}],9:[function(require,module,exports){
 /*!
  * changesets
@@ -892,10 +910,10 @@ Retain.unpack = function(data) {
  * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
  * copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -923,7 +941,7 @@ function Skip(length) {
 }
 
 // True inheritance
-Skip.prototype = Object.create(Operator.prototype, { 
+Skip.prototype = Object.create(Operator.prototype, {
   constructor: {
     value: Skip,
     enumerable: false,
@@ -955,4 +973,5 @@ Skip.prototype.invert = function() {
 Skip.unpack = function(data) {
   return new Skip(parseInt(data, 36))
 }
+
 },{"../Changeset":2,"../Operator":4,"./Insert":7,"./Retain":8}]},{},[6])

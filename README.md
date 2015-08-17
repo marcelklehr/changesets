@@ -9,6 +9,8 @@ Easily create and apply changesets at all sites of a distributed system, leverag
 
 News: *changesets* now supports the ottypes API spec of shareJS. If you'd like a more unixy, transport agnostic tool, though, check out [gulf](https://github.com/marcelklehr/gulf).
 
+News: Changesets v1.0.0 corrects the semantics of Changeset#merge, which now requires you to pass a consecutive changeset, instead of one that was created concurrently to the first one. This is inline with shareJS's API spec.
+
 ## Install
 `npm install changesets` or `component install marcelklehr/changesets`
 
@@ -215,6 +217,9 @@ Now, how can you deal with those attributes? Currently, you'll have to keep chan
 MIT
 
 ## Changelog
+
+1.0.0
+ * Change semantics of Changeset#merge to adhere to logic as well as shareJS spec
 
 0.4.0
  * Modularize operations

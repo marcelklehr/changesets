@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "diff_match_patch": "*",
-    "vows": "*"
+    "vows": "0.7.x"
   },
   "author": "Marcel Klehr <mklehr@gmx.net>",
   "license": [{"type": "MIT", "url": "http://opensource.org/licenses/MIT"}],

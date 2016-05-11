@@ -241,6 +241,23 @@ suite.addBatch({
 })
 
 suite.addBatch({
+'mixed (insert, retain, delete)':
+  { topic: function() {
+      return ["Hello adventurer!",
+        constructChangeset("Hello adventurer!", "Hello treasured adventurer!")
+      , constructChangeset("Hello adventurer!", "Good day adventurers, y'all!")
+      ]
+    }
+  , 'should cause the same outcome ragardless of the transformation order': function(er, cs) {
+      var text1 = cs[1].transformAgainst(cs[2], /*left:*/true).apply( cs[2].apply(cs[0]) )
+      var text2 = cs[2].transformAgainst(cs[1], /*left:*/false).apply( cs[1].apply(cs[0]) )
+      console.log(text1, text2)
+      assert.equal(text1, text2)
+    }
+  }
+})
+
+suite.addBatch({
 'accessories':
   { topic: function() {
       return [constructChangeset("1234", "1234b"), constructChangeset("1234", "1234a")]

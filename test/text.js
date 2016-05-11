@@ -260,12 +260,11 @@ suite.addBatch({
       var cs = constructChangeset("1234", "12a34b")
       cs.apply(cs.apply("1234"))
 
-      returnthis.callback()
+      return this.callback()
     }
   , 'should error if you apply the same cs twice, without transforming it': function(er) {
       if(!er) assert(false)
       console.log(er)
-      assert.throws(er)
     }
   }
 })
